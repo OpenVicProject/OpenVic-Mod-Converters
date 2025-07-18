@@ -1,18 +1,20 @@
 #%%
-# Place this Python script into whatever mod folder you want to check. The mod needs to have the common/countries, common/country_tags, common/cultures, common/religions, common/governments, history/countries and history/provinces folders and map/default.map and map/continent.txt files. If those are not present, either because the mod uses the base game files or relies on another mod you have to copy them or can't use this script.
+# Place this Python script into whatever mod folder you want to check. The mod needs to have the common/countries, common/country_tags, common/cultures, common/religions, common/governments, history/countries and history/provinces folders and map/area.txt, map/climate.txt, map/continent.txt, map/definition.csv and map/default.map files as well as the provinces.bmp, rivers.bmp and terrain.bmp. If those are not present, either because the mod uses the base game files or relies on another mod you have to copy them or can't use this script.
+from PIL import Image
 import re
 import os
 # This mod_specific_values function is the only parts of the script you might need to change, just follow the instructions.
 def mod_specific_values():
-	BASE_DATE = "1444.11.11" # Anything within a province file that is not set for a specific date will be treated as if it was set for this date. Replace 1444.11.11 with the intended base date in the form years.months.days, unless it would either be a 29th February as those currently do not exist in OpenVic and will be replaced with 28th February or a date outside the range -32768.1.1 to 32767.12.31. Any input that is not valid will be replaced with 1444.11.11.
-	START_DATE = "1444.11.11" # The history will be applied until the start date, including identical dates like 01444.11.11 or not at all if the base date is set to a later date and no prior history entries exist and error messages will be shown, for example if the province has only a religion or culture, but not both at the start date. The same restrictions as for the base date apply.
+	START_DATE = "1444.11.11" # Replace 1444.11.11 with the intended start date in the form years.months.days, unless it would either be a 29th February as those do neither exist in OpenVic nor Victoria 2 and will be replaced with 28th February and for OpenVic it must be a date within the range -32768.1.1 to 32767.12.31 or if the output is intended for Victoria 2, i assume dates must be after 1.1.1 or even later, but i am not sure about the exact details. Any input that is not valid will be replaced with 1444.11.11. The history will be applied until the start date, including identical dates like 01444.11.11 and error messages will be shown, for example if the province has only a religion or culture, but not both at the start date.
 	ENCODING = "utf-8" # Change this to whatever the encoding of the mod is, most likely it is either "utf-8" or "windows-1252". If it is mixed and you want to be able to automatically convert the mod to an OpenVic mod, you currently would have to pick one and convert the files with the other encoding.
+	WATER_INDEX = {15,17} # Replace these numbers, if the mod changes the default EU4 index values for the ocean and inland ocean, which can be found in the map/terrain.txt by looking at the type = ocean/inland_ocean { color = { ?? } } at the end of the file or map/terrain.bmp for example by using GIMP and selecting an ocean/inland_ocean pixel with the color picker which will show the index.
 	DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output files, so you can choose to ignore them, though in some cases you really should check them.
-		"BASE_DATE_EQUALS_DATE":True, # If you are certain that all existing date entries, with dates equal the BASE_DATE, should be applied after the BASE_DATE, you can set this to False.
+		"INDIVIDUAL_PIXELS":False, # Some provinces will be assigned to a continent, while some of their pixels in the terrain.bmp are for oceans/in the WATER_INDEX, while other provinces are assigned as ocean or lake in the default.map file, but have pixels that are continental/not in the WATER_INDEX. The province IDs with such wrong pixels will be shown regardless of whether this option is False or True, but setting this option to True will also show all individual wrong pixels, which can easily cause tens of thousands of lines mentioning wrong pixels.
 		"DATES_AFTER_START_DATE":True, # If you only care about mistakes that happen until the START_DATE, set this to False.
-		"MISSING_EMPTY_SPACE":True, # For example "add_core =" is searched as " add_core =" instead, as if it always had an empty space in front of it, which the formatting also inserts before and after "=", "{", "}" and the at the start and end of the text itself, as well as any time some parts get removed like date entries to evaluate the base date or put together like duplicate date entries. However there could be situations where EU4 does not actually require an empty space in front of it, for example 'capital = "?"add_core', which this script would not recognise as a core being added, so you should check all these warnings.
+		"MISSING_EMPTY_SPACE":True, # For example "add_core =" is searched as " add_core =" instead, as if it always had an empty space in front of it, which the formatting also inserts before and after "=", "{", "}" and the at the start and end of the text itself, as well as any time some parts get removed like date entries or put together like duplicate date entries. However there could be situations where EU4 does not actually require an empty space in front of it, for example 'capital = "?"add_core', which this script would not recognise as a core being added, so you should check all these warnings.
 		"IDENTICAL_DATES":True, # This mentions if one date appears multiple times in the same file, but their entries get combined anyway, so you can ignore this, if you don't want to combine the entries.
 		"DUPLICATE_DATES":True, # 1.1.1 and 01.01.01 entries do not get combined and are applied in whatever order they are found first, so you have to check those.
+		"DUPLICATE_NAMES":True, # Sometimes the male, female or dynasty names lists can contain duplicates, which does nothing, so you can ignore this, if you don't want to remove them.
 		"DUPLICATE_CORES":True, # Sometimes cores that already exist are added again, which does nothing, so you can ignore this, if you don't want to remove such duplicates.
 		"DUPLICATE_REMOVAL_CORE":True, # Cores may be removed twice for the same date, which does nothing, so you can ignore this.
 		"REMOVE_NON_EXISTANT_CORE":True, # Sometimes cores are removed even though they were not present at this date. So maybe some other core was actually supposed to be removed.
@@ -21,22 +23,20 @@ def mod_specific_values():
 		"REMOVE_NON_EXISTANT_CULTURE":True, # Sometimes cultures are removed as accepted cultures, even though they were not accepted at this date. So maybe some other culture was actually supposed to be removed.
 		"MISSING_PROVINCE_FILE":True, # Some provinces may be placed on a continent or such, but lack a province file, can be ignored as an empty "provinceID.txt" file will simply be generated anyway for the output.
 		"MISSING_PROVINCE_ID":True # While it is not necessary to use all numbers between 1 and the number of provinces as IDs, maybe you still want to add empty files for such cases, if not you can set it to False.
-	} # That's it. Now you can run it, if you have a sufficiently new Python version installed. Maybe anything after 3.7 will work.
-	return [BASE_DATE,START_DATE,ENCODING,DONT_IGNORE_ISSUE]
+	}
+	I_READ_THE_INSTRUCTIONS = False # Set this to True after changing all the settings you need to change or want to change and that's it. Now you can run it, if you have a sufficiently new Python version installed. Maybe anything after 3.7 will work, as well as a new enough Pillow version (Python Imaging Library).
+	return [START_DATE,ENCODING,WATER_INDEX,DONT_IGNORE_ISSUE,I_READ_THE_INSTRUCTIONS]
 
+# TODO check if ocean/lake files are empty, if bmps have correct indexes.
 # formats a text file when given the path.
 def format_text_in_path(path,ENCODING):
 	with open(path,'r',encoding=ENCODING,errors='replace') as file:
-		text = ' '
+		text = []
 		for line in file:
-			if line.__contains__("#"):
-				text = text + re.split("#",line,maxsplit=1)[0] + " "
-			else:
-				text = text + line + " "
-		text = re.sub("{",' { ',text)
-		text = re.sub("}",' } ',text)
-		text = re.sub("=",' = ',text)
-		text = re.sub(r"\s+",' ',text)
+			text.append(line.split('#',maxsplit=1)[0])
+		text = " ".join(text)
+		text = text.replace("{"," { ").replace("}"," } ").replace("="," = ")
+		text = " " + " ".join(text.split()) + " "
 		if text.__contains__("�"):
 			counter = text.count("�")
 			index = text.find("�")
@@ -46,36 +46,36 @@ def format_text_in_path(path,ENCODING):
 			else:
 				print(f"{counter} characters with wrong encoding found in file: {file.name} specifically � for example in:")
 			print(text[mindex:index + 50])
-		if text.count("{") != text.count("}"):
+		if text.count("{") != text.count("}"): # TODO go through every character and count the bracketvalue
 			print(f"DONT IGNORE THIS: The number of opening and closing brackets in {path} is not equal.")
-	return(text)
+	return text
 
-# Makes sure that the base and start date are valid and removes any unnecessary zeros in front of the numbers.
+# Makes sure that the start date is valid and removes any unnecessary zeros in front of the numbers.
 def verify_date(date):
 	if 2 != date.count("."):
 		print(f"{date} Try again...")
-		return("1444.11.11")
+		return "1444.11.11"
 	[years,months,days] = date.split(".")
 	years = int(years)
 	months = int(months)
 	days = int(days)
 	if years < -32768 or years > 32767:
 		print(f"{date} is not a valid date as OpenVic does not support years beyond -32768 to 32767 or -2^15 to 2^15 - 1. Sucks for Warhammer 40k fans.")
-		return("1444.11.11")
+		return "1444.11.11"
 	if months < 1 or months > 12 or days < 1 or days > 31:
 		print(f"{date} is not a valid date")
-		return("1444.11.11")
+		return "1444.11.11"
 	if days == 31:
 		if months == 4 or months == 6 or months == 9 or months == 11:
 			print(f"{date} is not a valid date")
-			return("1444.11.11")
+			return "1444.11.11"
 	if months == 2:
 		if days == 29:
 			print(f"29th February is not a valid date in OpenVic, so {date} will be changed to {years}.{months}.28 instead.")
 			return(f"{years}.{months}.28")
 		elif days == 30 or days == 31:
 			print(f"{days}th February? Really?")
-			return("1444.11.11")
+			return "1444.11.11"
 	return(f"{years}.{months}.{days}")
 
 # replace everything with " " between all occurances of a given string ending with a {, including that string, until the brackets close again and return the new string or "#" if an error occurs.
@@ -91,20 +91,19 @@ def remove_text_between_brackets(text,sub_string,path):
 			if counter == 0:
 				leftover = leftover[index + 1:]
 				break
-		if counter > 0:
-			print(f"In {path} the wrong number of brackets are in the text.")
+		else:
+			print(f"In {path} the brackets are wrong.")
 			return "#"
-		text = prior_text + " " + leftover
-	text = " " + text + " "
-	text = re.sub(r"\s+",' ',text)
+		text = prior_text + leftover
+	text = " " + " ".join(text.split()) + " "
 	return text
 
-# creates a set of all cultures and a dictionary {culture_group:{culture:{male_names:"names",female_names:"names",dynasty_names:"names"}}}
-def get_cultures(ENCODING):
+# creates a set of all cultures and a dictionary {culture_group:{culture:{male_names:" ",female_names:" ",dynasty_names:" "}}}
+def get_cultures(ENCODING,DONT_IGNORE_ISSUE):
 	culture_dictionary = dict()
 	for files in os.listdir("common/cultures"):
 		text = format_text_in_path("common/cultures/" + files,ENCODING)
-		if text == " ":
+		if text == "  ":
 			print(f"The file common/cultures/{files} is either empty or has only comments in it, why not remove it?")
 			continue
 		male_names_count = text.count(" male_names = {")
@@ -123,10 +122,10 @@ def get_cultures(ENCODING):
 		culture = ""
 		while text.__contains__(" = {"):
 			if text.startswith(" = {"):
-				print(f'DONT IGNORE THIS: common/cultures/{files} ended up starting with " = ' + '{" while being evaluated: ' + text[:99])
+				print(f'Correct the brackets in common/cultures/{files}. The file ended up starting with " = {{" while being evaluated: {text[:99]}')
 				return [dict(),set()]
 			[prior_text,leftover] = text.split(" = {",maxsplit=1)
-			counter = 1 + counter + prior_text.count("{") - prior_text.count("}")
+			counter = 1 + counter + prior_text.count("{") - prior_text.count("}") # TODO let it count per character to see if the counter ever gets completely wrong
 			new_entry = prior_text.rsplit(" ",maxsplit=1)[1]
 			if counter < 1 or counter > 3:
 				print(f"Correct the brackets in common/cultures/{files}")
@@ -159,18 +158,23 @@ def get_cultures(ENCODING):
 						print(f'Uneven number of " found for standard names {new_entry} in culture group {culture_group} in common/cultures/{files}')
 						return [dict(),set()]
 					elif name_string.count('"') == 0:
-						name_tuple = sorted(tuple(set(name_string.split())),key=str.lower)
+						name_list = name_string.split()
+						name_tuple = sorted(tuple(set(name_list)),key=str.lower)
 					else:
 						while name_string.count('"') > 1:
 							[first_part,name,second_part] = name_string.split('"',maxsplit=2)
+							if name.count(" ") > 4 or len(name) > 50:
+								print(f"The name {name} seems to be rather long, is this intended?")
 							name_list.append('"' + name.strip() + '"')
 							name_string = first_part + " " + second_part
-						name_tuple = sorted(tuple(set(name_list + name_string.split())),key=str.lower)
-					if name_tuple:
+						name_list += name_string.split()
+						name_tuple = sorted(tuple(set(name_list)),key=str.lower)
+					if DONT_IGNORE_ISSUE["DUPLICATE_NAMES"] and len(name_tuple) != len(name_list):
 						for name in name_tuple:
-							name_string += name + " "
-					if name_string != "":
-						culture_dictionary[culture_group]["standard_names"][new_entry] = name_string.strip()
+							name_list.remove(name)
+						print(f"The culture {culture} has the following {new_entry} multiple times: {name_list}")
+					if name_tuple:
+						culture_dictionary[culture_group]["standard_names"][new_entry] = " "
 				else:
 					if new_entry in culture_dictionary[culture_group]:
 						print(f"{new_entry} was already added as culture for {culture_group}, but got added again in common/cultures/{files}, which removes male, female and dynasty_names if they were added before.")
@@ -196,19 +200,25 @@ def get_cultures(ENCODING):
 					print(f'Uneven number of " found for {new_entry} in culture {culture} in culture group {culture_group} in common/cultures/{files}')
 					return [dict(),set()]
 				elif name_string.count('"') == 0:
-					name_tuple = sorted(tuple(set(name_string.split())),key=str.lower)
+					name_list = name_string.split()
+					name_tuple = sorted(tuple(set(name_list)),key=str.lower)
 				else:
 					while name_string.count('"') > 1:
 						[first_part,name,second_part] = name_string.split('"',maxsplit=2)
+						if name.count(" ") > 4 or len(name) > 50:
+							print(f"The name {name} seems to be rather long, is this intended?")
 						name_list.append('"' + name.strip() + '"')
 						name_string = first_part + " " + second_part
-					name_tuple = sorted(tuple(set(name_list + name_string.split())),key=str.lower)
-				if name_tuple:
+					name_list += name_string.split()
+					name_tuple = sorted(tuple(set(name_list)),key=str.lower)
+				if DONT_IGNORE_ISSUE["DUPLICATE_NAMES"] and len(name_tuple) != len(name_list):
 					for name in name_tuple:
-						name_string += name + " "
-				if name_string != "":
-					culture_dictionary[culture_group][culture][new_entry] = name_string.strip()
+						name_list.remove(name)
+					print(f"The culture {culture} has the following {new_entry} multiple times: {name_list}")
+				if name_tuple:
+					culture_dictionary[culture_group][culture][new_entry] = " "
 			text = leftover
+		# TODO maybe check the rest to see if brackets close properly and there is also nothing left otherwise.
 	culture_set = set()
 	for culture_group in culture_dictionary:
 		if len(culture_dictionary[culture_group]) < 2: # standard_names is always added.
@@ -235,7 +245,7 @@ def get_religions(ENCODING):
 	ICON_STRUCTURE = re.compile(r'(?=( icon = [0-9]{1,3} ))')
 	for files in os.listdir("common/religions"):
 		text = format_text_in_path("common/religions/" + files,ENCODING)
-		if text == " ":
+		if text == "  ":
 			print(f"The file common/religions/{files} is either empty or has only comments in it, why not remove it?")
 			continue
 		colors = re.findall(COLOR_STRUCTURE,text)
@@ -319,18 +329,19 @@ def get_governments(ENCODING):
 	government_set = set()
 	for files in os.listdir("common/governments"):
 		text = format_text_in_path("common/governments/" + files,ENCODING)
-		if text == " ":
+		if text == "  ":
 			print(f"The file common/governments/{files} is either empty or has only comments in it, why not remove it?")
 			continue
 		while text.__contains__(" = {"):
 			if text.startswith(" = {"):
-				print(f'common/governments/{files} ended up starting with " = ' + '{" while being evaluated: ' + text[:99])
+				print(f'common/governments/{files} ended up starting with " = {{" while being evaluated: {text[:99]}')
 				return set()
 			next_government = text.split(" = {",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1]
 			text = remove_text_between_brackets(text,next_government + " = {","common/governments/" + files)
 			if next_government != "pre_dharma_mapping":
 				government_set.add(next_government)
-		if text != " ":
+		if text != "  ":
+			print(f"After evaluating common/governments/{files} there should be nothing left, but this is: {text[:99]}")
 			return set()
 	return government_set
 
@@ -354,8 +365,8 @@ def get_date_text(text,date,path):
 			print(f"There was no closing bracket after the date {date} in {path}")
 			return "#"
 		next_date = re.search(r'[^-0-9]{1}' + date + " = {",text)
-	date_text = re.sub(r"\s+",' ',date_text)
-	if date_text == " ":
+	date_text = " " + " ".join(date_text.split()) + " "
+	if date_text == "  ":
 		return "#"
 	return date_text
 
@@ -367,7 +378,7 @@ def get_base_date_text(text,sorted_list,path):
 			return "#"
 		return text
 	for date in sorted_list:
-		if date == "BASE_DATE" or date == "START_DATE":
+		if date == "START_DATE":
 			continue
 		next_date = re.search(r'[^-0-9]{1}' + date + " = {",text)
 		while str(next_date) != "None":
@@ -387,14 +398,13 @@ def get_base_date_text(text,sorted_list,path):
 				return "#"
 			text = prior_text + " ## " + leftover
 			next_date = re.search(r'[^-0-9]{1}' + date + " = {",text)
-	text = re.sub(r"\s+",' ',text)
-	if text == " ":
+	text = " " + " ".join(text.split()) + " "
+	if text == "  ":
 		return "#"
-	return(text)
+	return text
 
 # Adds all valid dates of the form "years.months.days = {" from the text to the date_list, if they are not yet in it, which includes multiple functionally identical dates like 1.1.1 and 01.01.01 to use them for searching. While the 29th February does not exist in OpenVic and will be replaced with 28th February in the output files, it will still be added to the list, but a warning will be given. Then the dates get sorted, with the exception of functionally identical dates like 1.1.1 and 01.01.01 which stay in whatever order they happen to be found first.
-def get_sorted_dates(text,BASE_DATE,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_ISSUE):
-	[YEARS,MONTHS,DAYS] = BASE_DATE.split(".")
+def get_sorted_dates(text,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_ISSUE):
 	date_list = []
 	next_date = DATE_STRUCTURE.search(text)
 	while "None" != str(next_date):
@@ -430,13 +440,10 @@ def get_sorted_dates(text,BASE_DATE,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_I
 			elif int(days) == 30 or int(days) == 31:
 				print(f'{days}th February? Really? This "date" will be ignored. Found in: {path}')
 				continue
-		if DONT_IGNORE_ISSUE["BASE_DATE_EQUALS_DATE"] and int(YEARS) == int(years) and int(MONTHS) == int(months) and int(DAYS) == int(days):
-			print(f"{date} is identical to the BASE_DATE you entered, which could lead to unintended results, as the BASE_DATE is always applied before an identical date in: {path}")
 		if date not in date_list:
 			date_list.append(date)
 		elif DONT_IGNORE_ISSUE["IDENTICAL_DATES"]:
 			print(f"identical date: {date} found multiple times in: {path}")
-	date_list.insert(0,BASE_DATE)
 	date_list.append(START_DATE)
 	sorted_list = []
 	while len(date_list) > 0:
@@ -457,14 +464,14 @@ def get_sorted_dates(text,BASE_DATE,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_I
 				print(f"The dates {entry} and {prior_date} are in the same file, which can cause problems as their history is applied in whatever order the dates are found, instead of together, found in: {path}")
 		date_list.remove(prior_date)
 		sorted_list.append(prior_date)
-	sorted_list[sorted_list.index(BASE_DATE)] = "BASE_DATE"
 	sorted_list.reverse()
 	sorted_list[sorted_list.index(START_DATE)] = "START_DATE"
 	sorted_list.reverse()
-	return(sorted_list)
+	sorted_list.insert(0,"BASE_DATE")
+	return sorted_list
 
 # Checks country files in history/countries, their paths in common/country_tags and the files in common/countries.
-def check_country_files(CULTURE_SET,RELIGION_SET,GOVERNMENT_SET,BASE_DATE,START_DATE,ENCODING,DATE_STRUCTURE,DONT_IGNORE_ISSUE):
+def check_country_files(CULTURE_SET,RELIGION_SET,GOVERNMENT_SET,START_DATE,ENCODING,DATE_STRUCTURE,DONT_IGNORE_ISSUE):
 	tag_dictionary = dict()
 	path_dictionary = dict()
 	for files in os.listdir("history/countries"):
@@ -481,7 +488,7 @@ def check_country_files(CULTURE_SET,RELIGION_SET,GOVERNMENT_SET,BASE_DATE,START_
 			continue
 		path = "history/countries/" + files
 		text = format_text_in_path(path,ENCODING)
-		sorted_list = get_sorted_dates(text,BASE_DATE,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_ISSUE)
+		sorted_list = get_sorted_dates(text,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_ISSUE)
 		uniques = [[" government = ",""],[" primary_culture = ",""],[" religion = ",""],[" capital = ",""],[" technology_group = ",""]]
 		accepted_culture_list = []
 		added_accepted_culture_list = []
@@ -566,7 +573,7 @@ def check_country_files(CULTURE_SET,RELIGION_SET,GOVERNMENT_SET,BASE_DATE,START_
 	for files in os.listdir("common/country_tags"):
 		path = "common/country_tags/" + files
 		text = format_text_in_path(path,ENCODING)
-		if text == " ":
+		if text == "  ":
 			print(f"The file common/country_tags/{files} is either empty or has only comments in it, why not remove it?")
 			continue
 		for tag in tag_dictionary.keys():
@@ -581,9 +588,8 @@ def check_country_files(CULTURE_SET,RELIGION_SET,GOVERNMENT_SET,BASE_DATE,START_
 				else:
 					print(f"In common/country_tags a path is used twice: {country_path}")
 				text = first + second
-		text = re.sub(r"\s+",' ',text)
-		if text != " ":
-			print(f"Not all paths have been used by a tag in {path} specifically the following are left:{text}")
+		if "" != text.strip():
+			print(f"Not all paths have been used by a tag in {path} specifically the following are left: {text.strip()}")
 	if "No path" in tag_dictionary.values():
 		tags_without_path = []
 		for tag in tag_dictionary:
@@ -609,18 +615,18 @@ def check_country_files(CULTURE_SET,RELIGION_SET,GOVERNMENT_SET,BASE_DATE,START_
 	tag_set = set(tag_dictionary.keys())
 	return [tag_set,tag_dictionary]
 
-def check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,BASE_DATE,START_DATE,ENCODING,DATE_STRUCTURE,DONT_IGNORE_ISSUE):
+def check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,START_DATE,ENCODING,DATE_STRUCTURE,WATER_INDEX,DONT_IGNORE_ISSUE):
 	province_set = set()
 	for files in os.listdir("history/provinces"):
-		if not re.fullmatch('[0-9]{1}',files[0]):
-			print(f"Province file name does not start with a number in history/provinces/{files}")
+		if files[0] not in "123456789":
+			print(f"Province file name does not start with a number from 1 to 9 in history/provinces/{files}")
 			continue
 		path = "history/provinces/" + files
 		text = format_text_in_path(path,ENCODING)
-		sorted_list = get_sorted_dates(text,BASE_DATE,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_ISSUE)
+		sorted_list = get_sorted_dates(text,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_ISSUE)
 		check_date_entries(text,sorted_list,path,CULTURE_SET,RELIGION_SET,TAG_SET,DONT_IGNORE_ISSUE)
 		province_ID = ""
-		while re.fullmatch('[0-9]{1}',files[0]):
+		while files[0] in "0123456789": 
 			province_ID += files[0]
 			files = files[1:]
 		if int(province_ID) not in province_set:
@@ -635,7 +641,7 @@ def check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,BASE_DATE,START_DATE,E
 			if province != counter:
 				print(f"No province file found for: {counter} until {province}")
 				counter = province
-	check_continents(province_set,ENCODING,DONT_IGNORE_ISSUE)
+	check_continents(province_set,ENCODING,WATER_INDEX,DONT_IGNORE_ISSUE)
 	return
 
 # Checks if dates contain obvious mistakes like cultures that don't exist in the culture files.
@@ -687,7 +693,7 @@ def check_date_entries(text,sorted_list,path,CULTURE_SET,RELIGION_SET,TAG_SET,DO
 							else:
 								print(f"Controller {unique} in {path} was not found in the history/countries files")
 					elif index > 4:
-						if not unique.isnumeric():
+						if not all(char in "0123456789" for char in unique):
 							if index == 4:
 								print(f"base_tax {unique} in {path} is not an integer")
 							if index == 5:
@@ -740,13 +746,14 @@ def check_date_entries(text,sorted_list,path,CULTURE_SET,RELIGION_SET,TAG_SET,DO
 				print(f"Invalid remove_core = {tag} found for {date} in {path}")
 	return
 
-def check_continents(province_set,ENCODING,DONT_IGNORE_ISSUE):
+def check_continents(province_set,ENCODING,WATER_INDEX,DONT_IGNORE_ISSUE):
 	text = format_text_in_path("map/continent.txt",ENCODING)
 	continent_list = []
 	while text.__contains__("= {"):
 		[continent_name,text] = text.split("= {",maxsplit=1)
 		[provinces,text] = text.split("}",maxsplit=1)
 		if provinces == " ":
+			provinces = set()
 			continue
 		continent_name = continent_name.strip()
 		provinces = set(map(int,provinces.split()))
@@ -757,55 +764,181 @@ def check_continents(province_set,ENCODING,DONT_IGNORE_ISSUE):
 			for i in range(len(continent_list) - 1):
 				if entry in continent_list[i][1]:
 					print(f"Province {entry} is already on the continent {continent_list[i][0]}, but also on the continent {continent_name}")
-	if len(continent_list) > 6:
-		print("OpenVic only supports 6 continents in the UI, so while it will work when there are more, there wont be any functional buttons for them in some windows. Until support for this gets added, you will have to combine continents. Of course you can just generate the output and merge the continents there instead or ignore this problem.")
-	text = format_text_in_path("map/default.map",ENCODING)
-	text = text.split("sea_starts = {",maxsplit=1)[1]
-	provinces = text.split("}",maxsplit=1)[0]
-	provinces = set(map(int,provinces.split()))
-	continent_list.append(["OpenVic_ocean",provinces])
-	for entry in provinces:
-		if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in province_set:
-			print(f"No province file with the ID {entry} exists, but the province is an ocean province.")
-		for i in range(len(continent_list) - 1):
-			if entry in continent_list[i][1]:
-				print(f"Province {entry} is already on the continent {continent_list[i][0]}, but also an ocean")
-	text = format_text_in_path("map/default.map",ENCODING)
-	text = text.split("lakes = {",maxsplit=1)[1]
-	provinces = text.split("}",maxsplit=1)[0]
-	provinces = set(map(int,provinces.split()))
-	continent_list.append(["OpenVic_lakes",provinces])
-	for entry in provinces:
-		if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in province_set:
-			print(f"No province file with the ID {entry} exists, but the province is a lake province.")
-		for i in range(len(continent_list) - 2):
-			if entry in continent_list[i][1]:
-				print(f"Province {entry} is already on the continent {continent_list[i][0]}, but also a lake")
-		if entry in continent_list[len(continent_list) - 2][1]:
-			print(f"Province {entry} is already an ocean, but also a lake")
 	combined_continent_set = provinces.copy()
 	for i in range(len(continent_list) - 1):
 		combined_continent_set = combined_continent_set.union(continent_list[i][1])
-	leftover_provinces = province_set - combined_continent_set
+	if len(continent_list) > 6:
+		print("OpenVic only supports 6 continents in the UI, so while it will work when there are more, there wont be any functional buttons for them in some windows. Until support for this gets added, you will have to combine continents. Of course you can just generate the output and merge the continents there instead or ignore this problem.")
+	text = format_text_in_path("map/default.map",ENCODING)
+	ocean = text.split("sea_starts = {",maxsplit=1)[1].split("}",maxsplit=1)[0]
+	ocean = set(map(int,ocean.split()))
+	for entry in ocean:
+		if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in province_set:
+			print(f"No province file with the ID {entry} exists, but the province is an ocean province.")
+		if entry in combined_continent_set:
+			print(f"Province {entry} is already on a continent, but also an ocean.")
+	lakes = text.split("lakes = {",maxsplit=1)[1].split("}",maxsplit=1)[0]
+	lakes = set(map(int,lakes.split()))
+	water_provinces = ocean.union(lakes)
+	for entry in lakes:
+		if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in province_set:
+			print(f"No province file with the ID {entry} exists, but the province is a lake province.")
+		if entry in combined_continent_set:
+			print(f"Province {entry} is already on a continent, but also a lake.")
+		if entry in ocean:
+			print(f"Province {entry} is already an ocean, but also a lake.")
+	leftover_provinces = province_set - combined_continent_set - ocean - lakes
 	if leftover_provinces:
 		print(f"Some provinces are neither a part of a continent, ocean or lake: {leftover_provinces}")
+	image = Image.open("map/provinces.bmp")
+	w,h = image.size
+	load_province_bmp = image.load()
+	pixel_set = set()
+	for x in range(w):
+		for y in range(h):
+			pixel_set.add(load_province_bmp[x,y])
+	if text.count(" max_provinces = ") != 1:
+		print('Either " max_provinces = " does not exist in the map/default.map file or it appears multiple times.')
+	else:
+		max_provinces = text.split(" max_provinces = ",maxsplit=1)[1].split(" ",maxsplit=1)[0]
+		if not all(char in "0123456789" for char in max_provinces):
+			print(f"In map/default.map max_provinces = {max_provinces} is not an integer value.")
+		elif len(pixel_set) + 1 != int(max_provinces):
+			print(f"The max_provinces value {max_provinces} in the map/default.map should be 1 higher than the number of different colors in the province.bmp {len(pixel_set)}.")
+	RGB_DICTIONARY = check_definition_csv(ENCODING)
+	province_colors_are_in_definition_csv = True
+	if pixel_set.difference(RGB_DICTIONARY.keys()):
+		province_colors_are_in_definition_csv = False
+		print(f"These colors are in the provinces.bmp, but not in the defintion.csv {pixel_set.difference(RGB_DICTIONARY.keys())}")
+		for x in range(w):
+			for y in range(h):
+				if load_province_bmp[x,y] not in RGB_DICTIONARY:
+					print(f"The color at {x},{y} in the terrain.bmp is not in the map/definition.csv")
+	terrain = Image.open("map/terrain.bmp")
+	terrain_w,terrain_h = terrain.size
+	if terrain_w != w or terrain_h != h:
+		print(f"The width and/or height of the provinces.bmp {w},{h} and terrain.bmp {terrain_w},{terrain_h} are not equal, which also means it wont be checked whether some terrain pixels are ocean or not while the province itself is continental or not.")
+	else:
+		load_terrain_image = terrain.load()
+		wrong_water_terrain = set()
+		wrong_land_terrain = set()
+		if province_colors_are_in_definition_csv:
+			for x in range(w):
+				for y in range(h):
+					if load_terrain_image[x,y] in WATER_INDEX:
+						if RGB_DICTIONARY[load_province_bmp[x,y]] not in water_provinces:
+							if DONT_IGNORE_ISSUE["INDIVIDUAL_PIXELS"]:
+								print(f"The color {load_province_bmp[x,y]} at {x},{y} is for a province on a continent, but the terrain is water.")
+							wrong_water_terrain.add(RGB_DICTIONARY[load_province_bmp[x,y]])
+					else:
+						if RGB_DICTIONARY[load_province_bmp[x,y]] in water_provinces:
+							if DONT_IGNORE_ISSUE["INDIVIDUAL_PIXELS"]:
+								print(f"The color {load_province_bmp[x,y]} at {x},{y} is for a province in an ocean or lake, but the terrain is not.")
+							wrong_land_terrain.add(RGB_DICTIONARY[load_province_bmp[x,y]])
+			if wrong_water_terrain:
+				print(f"Some terrain.bmp pixels are water, but their provinces are not ocean or lakes: {wrong_water_terrain}")
+			if wrong_land_terrain:
+				print(f"Some terrain.bmp pixels are not water, but their provinces are ocean or lakes: {wrong_land_terrain}")
+		else:
+			print("Whether some Terrain pixels are water or not, while the province it belongs to is the other could not be checked due to colors in the provinces.bmp that are not in the definition.csv")
+	text = format_text_in_path("map/climate.txt",ENCODING)
+	climate_impassable_exists = False
+	while text.__contains__(" = {"):
+		[climate_name,text] = text.split(" = {",maxsplit=1)
+		[provinces,text] = text.split("}",maxsplit=1)
+		if provinces == " ":
+			continue
+		climate_name = climate_name.rsplit(" ",maxsplit=1)[1]
+		provinces = set(map(int,provinces.split()))
+		for entry in provinces:
+			if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in province_set:
+				print(f"No province file with the ID {entry} exists, but the province has the climate: {climate_name}")
+			if entry in ocean:
+				print(f"Province {entry} is an ocean, but also has the climate {climate_name}.")
+			if entry in lakes:
+				print(f"Province {entry} is a lake, but also has the climate {climate_name}.")
+		if climate_name == "impassable":
+			climate_impassable_exists = True
+			check_area(combined_continent_set,lakes,provinces,ENCODING)
+	if not climate_impassable_exists:
+		check_area(combined_continent_set,lakes,set(),ENCODING)
 	return
 
-[BASE_DATE,START_DATE,ENCODING,DONT_IGNORE_ISSUE] = mod_specific_values()
-BASE_DATE = verify_date(BASE_DATE)
-START_DATE = verify_date(START_DATE)
-[CULTURE_DICTIONARY,CULTURE_SET] = get_cultures(ENCODING)
-[RELIGION_DICTIONARY,RELIGION_SET] = get_religions(ENCODING)
-GOVERNMENT_SET = get_governments(ENCODING)
-if CULTURE_SET != set() and RELIGION_SET != set() and GOVERNMENT_SET != set():
-	DATE_STRUCTURE = re.compile(r'[^-0-9]{1}[-]{0,1}[0-9]{1,5}["."][0-9]{1,2}["."][0-9]{1,2} = {')
-	[TAG_SET,TAG_DICTIONARY] = check_country_files(CULTURE_SET,RELIGION_SET,GOVERNMENT_SET,BASE_DATE,START_DATE,ENCODING,DATE_STRUCTURE,DONT_IGNORE_ISSUE)
-	check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,BASE_DATE,START_DATE,ENCODING,DATE_STRUCTURE,DONT_IGNORE_ISSUE)
+def check_area(combined_continent_set,lakes,impassable,ENCODING):
+	area_province_set = set()
+	area_set = set()
+	text = format_text_in_path("map/area.txt",ENCODING)
+	text_list = text.split(" = {")
+	area_name = text_list[0].strip()
+	area_set.add(area_name)
+	text_list.remove(text_list[0])
+	for entry in text_list:
+		for province in set(map(int,entry.split("}",maxsplit=1)[0].split())):
+			if province in area_province_set:
+				print(f"The province {province} is already in another area.")
+			elif province in impassable:
+				print(f"The province {province} is impassable and should not be in an area.")
+			elif province in lakes:
+				print(f"The province {province} is a lake and should not be in an area.")
+			else:
+				area_province_set.add(province)
+		area_name = entry.split("}",maxsplit=1)[1].strip()
+		if area_name in area_set:
+			print(f"At least 2 areas have the same name: {area_name}")
+		else:
+			area_set.add(area_name)
+	if combined_continent_set - area_province_set - impassable != set():
+		print(f"Some continental provinces are not in an area: {combined_continent_set - area_province_set - impassable}")
+	return
+
+def check_definition_csv(ENCODING):
+	not_more_than_once = True
+	definitions_dictionary = dict()
+	RGB_dictionary = dict()
+	with open("map/definition.csv",'r',encoding=ENCODING,errors='replace') as file:
+		for line in file:
+			if line[0] in "123456789":
+				[provinceID,red,green,blue] = line.split(";",maxsplit=4)[0:4]
+				if not all(char in "0123456789" for char in provinceID):
+					print(f"The province ID {provinceID} is not a valid number in map/definition.csv")
+				elif provinceID in definitions_dictionary:
+					print(f"At least 2 lines start with the same number {provinceID} in map/definition.csv")
+				elif not (all(char in "0123456789" for char in red) and all(char in "0123456789" for char in green) and all(char in "0123456789" for char in blue)):
+					print(f"One of the red, green or blue values is not a number in line {line.strip()} in map/definition.csv")
+				elif not ((int(red) < 256) and (int(green) < 256) and (int(blue) < 256)):
+					print(f"The red, green and blue values have to be numbers from 0 to 255 in line {line.strip()} in map/definition.csv")
+				else:
+					RGB = tuple((int(red),int(green),int(blue)))
+					if RGB in RGB_dictionary:
+						print(f"Another province was already assigned the same RGB value {RGB} as {provinceID} in map/definition.csv")
+					else:
+						definitions_dictionary[provinceID] = RGB
+						RGB_dictionary[RGB] = int(provinceID)
+			elif not_more_than_once and (line[0] == "p"):
+				not_more_than_once = False
+			elif line[0] == "#":
+				pass
+			else:
+				print(f"In map/definition.csv this line has to change or be removed: {line.strip()}")
+	return RGB_dictionary
+
+[START_DATE,ENCODING,WATER_INDEX,DONT_IGNORE_ISSUE,I_READ_THE_INSTRUCTIONS] = mod_specific_values()
+if not  I_READ_THE_INSTRUCTIONS:
+	print("READ AND FOLLOW THE INSTRUCTIONS AT THE START OF THE FILE! For some mods you still have to make minimal changes yourself.")
 else:
-	if CULTURE_SET == set():
-		print(f"No cultures could be found in the common/cultures folder.")
-	if RELIGION_SET == set():
-		print(f"No religions could be found in the common/religions folder.")
-	if GOVERNMENT_SET == set():
-		print(f"No governments could be found in the common/governments folder.")
+	START_DATE = verify_date(START_DATE)
+	[CULTURE_DICTIONARY,CULTURE_SET] = get_cultures(ENCODING,DONT_IGNORE_ISSUE)
+	[RELIGION_DICTIONARY,RELIGION_SET] = get_religions(ENCODING)
+	GOVERNMENT_SET = get_governments(ENCODING)
+	if CULTURE_SET != set() and RELIGION_SET != set() and GOVERNMENT_SET != set():
+		DATE_STRUCTURE = re.compile(r'[^-0-9]{1}[-]{0,1}[0-9]{1,5}["."][0-9]{1,2}["."][0-9]{1,2} = {')
+		[TAG_SET,TAG_DICTIONARY] = check_country_files(CULTURE_SET,RELIGION_SET,GOVERNMENT_SET,START_DATE,ENCODING,DATE_STRUCTURE,DONT_IGNORE_ISSUE)
+		check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,START_DATE,ENCODING,DATE_STRUCTURE,WATER_INDEX,DONT_IGNORE_ISSUE)
+	else:
+		if CULTURE_SET == set():
+			print(f"No cultures could be found in the common/cultures folder.")
+		if RELIGION_SET == set():
+			print(f"No religions could be found in the common/religions folder.")
+		if GOVERNMENT_SET == set():
+			print(f"No governments could be found in the common/governments folder.")
 #%%
