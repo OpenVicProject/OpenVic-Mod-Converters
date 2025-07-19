@@ -813,7 +813,7 @@ def check_continents(province_set,ENCODING,WATER_INDEX,DONT_IGNORE_ISSUE):
 		for x in range(w):
 			for y in range(h):
 				if load_province_bmp[x,y] not in RGB_DICTIONARY:
-					print(f"The color at {x},{y} in the terrain.bmp is not in the map/definition.csv")
+					print(f"The color at {x},{y} in the provinces.bmp is not in the map/definition.csv")
 	terrain = Image.open("map/terrain.bmp")
 	terrain_w,terrain_h = terrain.size
 	if terrain_w != w or terrain_h != h:
