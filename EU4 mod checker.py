@@ -624,7 +624,7 @@ def check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,START_DATE,ENCODING,DA
 	province_set = set()
 	for root, dirs, files in os.walk("history/provinces"):
 		for file in files:
-			if file[0] not in "123456789":
+			if not re.fullmatch("[1-9]",file[0]):
 				print(f"Province file name does not start with a number from 1 to 9 in history/provinces/{file}")
 				continue
 			path = os.path.join(root, file)
@@ -632,7 +632,7 @@ def check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,START_DATE,ENCODING,DA
 			sorted_list = get_sorted_dates(text,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_ISSUE)
 			check_date_entries(text,sorted_list,path,CULTURE_SET,RELIGION_SET,TAG_SET,DONT_IGNORE_ISSUE)
 			province_ID = ""
-			while file[0] in "0123456789": 
+			while re.fullmatch("[0-9]",file[0]): 
 				province_ID += file[0]
 				file = file[1:]
 			if int(province_ID) not in province_set:
@@ -685,13 +685,15 @@ def check_date_entries(text,sorted_list,path,CULTURE_SET,RELIGION_SET,TAG_SET,DO
 				if index != 4:
 					unique = date_text.split(uniques[index][0],maxsplit=1)[1].split(" ",maxsplit=1)[0]
 					if index == 0:
-						if unique not in CULTURE_SET:
-							if unique != "no_culture":
-								print(f"Culture {unique} in {path} was not found in the common/cultures files")
+						if unique == "no_culture":
+							print(f"culture = no_culture will not generate pops. Found for date {date} in {path}")
+						elif unique not in CULTURE_SET:
+							print(f"Culture {unique} in {path} was not found in the common/cultures files")
 					elif index == 1:
-						if unique not in RELIGION_SET:
-							if unique != "no_religion":
-								print(f"Religion {unique} in {path} was not found in the common/religions files")
+						if unique == "no_religion":
+								print(f"religion = no_religion will not generate pops. Found for date {date} in {path}")
+						elif unique not in RELIGION_SET:
+							print(f"Religion {unique} in {path} was not found in the common/religions files")
 					elif index < 4:
 						if unique not in TAG_SET and unique != "---":
 							if index == 2:
@@ -699,19 +701,15 @@ def check_date_entries(text,sorted_list,path,CULTURE_SET,RELIGION_SET,TAG_SET,DO
 							else:
 								print(f"Controller {unique} in {path} was not found in the history/countries files")
 					elif index > 4:
-						if not all(char in "0123456789" for char in unique):
-							if index == 4:
-								print(f"base_tax {unique} in {path} is not an integer")
+						if not re.fullmatch("[0-9]+",unique):
 							if index == 5:
-								print(f"base_production {unique} in {path} is not an integer")
+								print(f"base_tax {unique} in {path} is not an integer")
 							if index == 6:
+								print(f"base_production {unique} in {path} is not an integer")
+							if index == 7:
 								print(f"base_manpower {unique} in {path} is not an integer")
 			if DONT_IGNORE_ISSUE["MISSING_EMPTY_SPACE"] and str(re.search(r'[^ _a-zA-Z]{1}' + uniques[index][0].strip(),date_text)) != "None":
 				print(f"{uniques[index][0].strip()} entry may not be recognised as it does not have an empty space in front of it in {path}")
-		if date_text.__contains__(" culture = no_culture"):
-			print(f"culture = no_culture will not generate pops. Found for date {date} in {path}")
-		if date_text.__contains__(" religion = no_religion"):
-			print(f"religion = no_religion will not generate pops. Found for date {date} in {path}")
 		added_cores = []
 		removed_cores = []
 		core_text = date_text
@@ -807,7 +805,7 @@ def check_continents(province_set,ENCODING,WATER_INDEX,DONT_IGNORE_ISSUE):
 		print('Either " max_provinces = " does not exist in the map/default.map file or it appears multiple times.')
 	else:
 		max_provinces = text.split(" max_provinces = ",maxsplit=1)[1].split(" ",maxsplit=1)[0]
-		if not all(char in "0123456789" for char in max_provinces):
+		if not re.fullmatch("[0-9]+",max_provinces):
 			print(f"In map/default.map max_provinces = {max_provinces} is not an integer value.")
 		elif len(pixel_set) + 1 != int(max_provinces):
 			print(f"The max_provinces value {max_provinces} in the map/default.map should be 1 higher than the number of different colors in the province.bmp {len(pixel_set)}.")
@@ -893,7 +891,7 @@ def check_area(combined_continent_set,lakes,impassable,ENCODING):
 			print(f"At least 2 areas have the same name: {area_name}")
 		else:
 			area_set.add(area_name)
-	if combined_continent_set - area_province_set - impassable != set():
+	if combined_continent_set - area_province_set - impassable:
 		print(f"Some continental provinces are not in an area: {combined_continent_set - area_province_set - impassable}")
 	return
 
@@ -903,13 +901,13 @@ def check_definition_csv(ENCODING):
 	RGB_dictionary = dict()
 	with open("map/definition.csv",'r',encoding=ENCODING,errors='replace') as file:
 		for line in file:
-			if line[0] in "123456789":
+			if re.fullmatch("[1-9]",line[0]):
 				[provinceID,red,green,blue] = line.split(";",maxsplit=4)[0:4]
-				if not all(char in "0123456789" for char in provinceID):
+				if not re.fullmatch("[0-9]+",provinceID):
 					print(f"The province ID {provinceID} is not a valid number in map/definition.csv")
 				elif provinceID in definitions_dictionary:
 					print(f"At least 2 lines start with the same number {provinceID} in map/definition.csv")
-				elif not (all(char in "0123456789" for char in red) and all(char in "0123456789" for char in green) and all(char in "0123456789" for char in blue)):
+				elif not (re.fullmatch("[0-9]+",red) and re.fullmatch("[0-9]+",green) and re.fullmatch("[0-9]+",blue)):
 					print(f"One of the red, green or blue values is not a number in line {line.strip()} in map/definition.csv")
 				elif not ((int(red) < 256) and (int(green) < 256) and (int(blue) < 256)):
 					print(f"The red, green and blue values have to be numbers from 0 to 255 in line {line.strip()} in map/definition.csv")
@@ -936,15 +934,15 @@ else:
 	[CULTURE_DICTIONARY,CULTURE_SET] = get_cultures(ENCODING,DONT_IGNORE_ISSUE)
 	[RELIGION_DICTIONARY,RELIGION_SET] = get_religions(ENCODING)
 	GOVERNMENT_SET = get_governments(ENCODING)
-	if CULTURE_SET != set() and RELIGION_SET != set() and GOVERNMENT_SET != set():
+	if CULTURE_SET and RELIGION_SET and GOVERNMENT_SET:
 		DATE_STRUCTURE = re.compile(r'[^-0-9]{1}[-]{0,1}[0-9]{1,5}["."][0-9]{1,2}["."][0-9]{1,2} = {')
 		[TAG_SET,TAG_DICTIONARY] = check_country_files(CULTURE_SET,RELIGION_SET,GOVERNMENT_SET,START_DATE,ENCODING,DATE_STRUCTURE,DONT_IGNORE_ISSUE)
 		check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,START_DATE,ENCODING,DATE_STRUCTURE,WATER_INDEX,DONT_IGNORE_ISSUE)
 	else:
-		if CULTURE_SET == set():
+		if not CULTURE_SET:
 			print(f"No cultures could be found in the common/cultures folder.")
-		if RELIGION_SET == set():
+		if not RELIGION_SET:
 			print(f"No religions could be found in the common/religions folder.")
-		if GOVERNMENT_SET == set():
+		if not GOVERNMENT_SET:
 			print(f"No governments could be found in the common/governments folder.")
 #%%
