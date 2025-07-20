@@ -101,61 +101,104 @@ def remove_text_between_brackets(text,sub_string,path):
 # creates a set of all cultures and a dictionary {culture_group:{culture:{male_names:" ",female_names:" ",dynasty_names:" "}}}
 def get_cultures(ENCODING,DONT_IGNORE_ISSUE):
 	culture_dictionary = dict()
-	for files in os.listdir("common/cultures"):
-		text = format_text_in_path("common/cultures/" + files,ENCODING)
-		if text == "  ":
-			print(f"The file common/cultures/{files} is either empty or has only comments in it, why not remove it?")
-			continue
-		male_names_count = text.count(" male_names = {")
-		female_names_count = text.count(" female_names = {")
-		dynasty_names_count = text.count(" dynasty_names = {")
-		text = remove_text_between_brackets(text," country = {","common/cultures/" + files)
-		text = remove_text_between_brackets(text," province = {","common/cultures/" + files)
-		if male_names_count != text.count(" male_names = {"):
-			print('Some male_names list was between " country = {" or " province = {" and the closing bracket "}" and was therefore removed')
-		if female_names_count != text.count(" female_names = {"):
-			print('Some female_names list was between " country = {" or " province = {" and the closing bracket "}" and was therefore removed')
-		if dynasty_names_count != text.count(" dynasty_names = {"):
-			print('Some dynasty_names list was between " country = {" or " province = {" and the closing bracket "}" and was therefore removed')
-		counter = 0
-		culture_group = ""
-		culture = ""
-		while text.__contains__(" = {"):
-			if text.startswith(" = {"):
-				print(f'Correct the brackets in common/cultures/{files}. The file ended up starting with " = {{" while being evaluated: {text[:99]}')
-				return [dict(),set()]
-			[prior_text,leftover] = text.split(" = {",maxsplit=1)
-			counter = 1 + counter + prior_text.count("{") - prior_text.count("}") # TODO let it count per character to see if the counter ever gets completely wrong
-			new_entry = prior_text.rsplit(" ",maxsplit=1)[1]
-			if counter < 1 or counter > 3:
-				print(f"Correct the brackets in common/cultures/{files}")
-				return [dict(),set()]
-			elif counter == 1:
-				if new_entry == "male_names" or new_entry == "female_names" or new_entry == "dynasty_names":
-					print(f'Culture groups can not be called "male_names", "female_names" or "dynasty_names" or the brackets in common/cultures/{files} are wrong.')
+	for root, dirs, files in os.walk("common/cultures"):
+		for file in files:
+			text = format_text_in_path(os.path.join(root, file),ENCODING)
+			if text == "  ":
+				print(f"The file common/cultures/{file} is either empty or has only comments in it, why not remove it?")
+				continue
+			male_names_count = text.count(" male_names = {")
+			female_names_count = text.count(" female_names = {")
+			dynasty_names_count = text.count(" dynasty_names = {")
+			text = remove_text_between_brackets(text," country = {","common/cultures/" + file)
+			text = remove_text_between_brackets(text," province = {","common/cultures/" + file)
+			if male_names_count != text.count(" male_names = {"):
+				print('Some male_names list was between " country = {" or " province = {" and the closing bracket "}" and was therefore removed')
+			if female_names_count != text.count(" female_names = {"):
+				print('Some female_names list was between " country = {" or " province = {" and the closing bracket "}" and was therefore removed')
+			if dynasty_names_count != text.count(" dynasty_names = {"):
+				print('Some dynasty_names list was between " country = {" or " province = {" and the closing bracket "}" and was therefore removed')
+			counter = 0
+			culture_group = ""
+			culture = ""
+			while text.__contains__(" = {"):
+				if text.startswith(" = {"):
+					print(f'Correct the brackets in common/cultures/{file}. The file ended up starting with " = {{" while being evaluated: {text[:99]}')
 					return [dict(),set()]
-				culture_group = new_entry
-				if culture_group in culture_dictionary:
-					print(f"{culture_group} found a second time in common/cultures/{files}")
-				else:
-					culture_dictionary[culture_group] = dict()
-					culture_dictionary[culture_group]["standard_names"] = dict()
-			elif counter == 2:
-				if new_entry == "male_names" or new_entry == "female_names" or new_entry == "dynasty_names":
-					if new_entry in culture_dictionary[culture_group]["standard_names"]:
-						print(f"{new_entry} was already added as standard name list for {culture_group}, but got added again, which replaces the names added before.")
+				[prior_text,leftover] = text.split(" = {",maxsplit=1)
+				counter = 1 + counter + prior_text.count("{") - prior_text.count("}") # TODO let it count per character to see if the counter ever gets completely wrong
+				new_entry = prior_text.rsplit(" ",maxsplit=1)[1]
+				if counter < 1 or counter > 3:
+					print(f"Correct the brackets in common/cultures/{file}")
+					return [dict(),set()]
+				elif counter == 1:
+					if new_entry == "male_names" or new_entry == "female_names" or new_entry == "dynasty_names":
+						print(f'Culture groups can not be called "male_names", "female_names" or "dynasty_names" or the brackets in common/cultures/{file} are wrong.')
+						return [dict(),set()]
+					culture_group = new_entry
+					if culture_group in culture_dictionary:
+						print(f"{culture_group} found a second time in common/cultures/{file}")
+					else:
+						culture_dictionary[culture_group] = dict()
+						culture_dictionary[culture_group]["standard_names"] = dict()
+				elif counter == 2:
+					if new_entry == "male_names" or new_entry == "female_names" or new_entry == "dynasty_names":
+						if new_entry in culture_dictionary[culture_group]["standard_names"]:
+							print(f"{new_entry} was already added as standard name list for {culture_group}, but got added again, which replaces the names added before.")
+						[name_string,leftover] = leftover.split("}",maxsplit=1)
+						if name_string.__contains__("{"):
+							print(f'In the culture group {culture_group} for the standard names between "{new_entry} =" and the opening and closing bracket was another opening bracket in common/cultures/{file}')
+							return [dict(),set()]
+						counter -= 1
+						name_list = []
+						name_tuple = ()
+						if name_string == " ":
+							print(f"There are no {new_entry} for the standard names in {culture_group} in common/cultures/{file}")
+							name_string = ""
+						elif name_string.count('"')%2 != 0:
+							print(f'Uneven number of " found for standard names {new_entry} in culture group {culture_group} in common/cultures/{file}')
+							return [dict(),set()]
+						elif name_string.count('"') == 0:
+							name_list = name_string.split()
+							name_tuple = sorted(tuple(set(name_list)),key=str.lower)
+						else:
+							while name_string.count('"') > 1:
+								[first_part,name,second_part] = name_string.split('"',maxsplit=2)
+								if name.count(" ") > 4 or len(name) > 50:
+									print(f"The name {name} seems to be rather long, is this intended?")
+								name_list.append('"' + name.strip() + '"')
+								name_string = first_part + " " + second_part
+							name_list += name_string.split()
+							name_tuple = sorted(tuple(set(name_list)),key=str.lower)
+						if DONT_IGNORE_ISSUE["DUPLICATE_NAMES"] and len(name_tuple) != len(name_list):
+							for name in name_tuple:
+								name_list.remove(name)
+							print(f"The culture {culture} has the following {new_entry} multiple times: {name_list}")
+						if name_tuple:
+							culture_dictionary[culture_group]["standard_names"][new_entry] = " "
+					else:
+						if new_entry in culture_dictionary[culture_group]:
+							print(f"{new_entry} was already added as culture for {culture_group}, but got added again in common/cultures/{file}, which removes male, female and dynasty_names if they were added before.")
+						culture = new_entry
+						culture_dictionary[culture_group][culture] = dict()
+				elif counter == 3:
+					if new_entry != "male_names" and new_entry != "female_names" and new_entry != "dynasty_names":
+						print(f"{new_entry} is neither male_names nor female_names nor dynasty_names so it can't be added as name list for the culture {culture} in culture group {culture_group}, check the brackets in common/cultures/{file}")
+						return [dict(),set()]
+					if new_entry in culture_dictionary[culture_group][culture]:
+						print(f"{new_entry} were already added for culture {culture} in culture group {culture_group}, but got added again, which removes the {new_entry} added before.")
 					[name_string,leftover] = leftover.split("}",maxsplit=1)
 					if name_string.__contains__("{"):
-						print(f'In the culture group {culture_group} for the standard names between "{new_entry} =" and the opening and closing bracket was another opening bracket in common/cultures/{files}')
+						print(f'In the culture group {culture_group} for the culture {culture} between "{new_entry} =" and the opening and closing bracket was another opening bracket in common/cultures/{file}')
 						return [dict(),set()]
 					counter -= 1
 					name_list = []
 					name_tuple = ()
 					if name_string == " ":
-						print(f"There are no {new_entry} for the standard names in {culture_group} in common/cultures/{files}")
+						print(f"There are no {new_entry} for the culture {culture} in {culture_group} in common/cultures/{file}")
 						name_string = ""
 					elif name_string.count('"')%2 != 0:
-						print(f'Uneven number of " found for standard names {new_entry} in culture group {culture_group} in common/cultures/{files}')
+						print(f'Uneven number of " found for {new_entry} in culture {culture} in culture group {culture_group} in common/cultures/{file}')
 						return [dict(),set()]
 					elif name_string.count('"') == 0:
 						name_list = name_string.split()
@@ -174,50 +217,8 @@ def get_cultures(ENCODING,DONT_IGNORE_ISSUE):
 							name_list.remove(name)
 						print(f"The culture {culture} has the following {new_entry} multiple times: {name_list}")
 					if name_tuple:
-						culture_dictionary[culture_group]["standard_names"][new_entry] = " "
-				else:
-					if new_entry in culture_dictionary[culture_group]:
-						print(f"{new_entry} was already added as culture for {culture_group}, but got added again in common/cultures/{files}, which removes male, female and dynasty_names if they were added before.")
-					culture = new_entry
-					culture_dictionary[culture_group][culture] = dict()
-			elif counter == 3:
-				if new_entry != "male_names" and new_entry != "female_names" and new_entry != "dynasty_names":
-					print(f"{new_entry} is neither male_names nor female_names nor dynasty_names so it can't be added as name list for the culture {culture} in culture group {culture_group}, check the brackets in common/cultures/{files}")
-					return [dict(),set()]
-				if new_entry in culture_dictionary[culture_group][culture]:
-					print(f"{new_entry} were already added for culture {culture} in culture group {culture_group}, but got added again, which removes the {new_entry} added before.")
-				[name_string,leftover] = leftover.split("}",maxsplit=1)
-				if name_string.__contains__("{"):
-					print(f'In the culture group {culture_group} for the culture {culture} between "{new_entry} =" and the opening and closing bracket was another opening bracket in common/cultures/{files}')
-					return [dict(),set()]
-				counter -= 1
-				name_list = []
-				name_tuple = ()
-				if name_string == " ":
-					print(f"There are no {new_entry} for the culture {culture} in {culture_group} in common/cultures/{files}")
-					name_string = ""
-				elif name_string.count('"')%2 != 0:
-					print(f'Uneven number of " found for {new_entry} in culture {culture} in culture group {culture_group} in common/cultures/{files}')
-					return [dict(),set()]
-				elif name_string.count('"') == 0:
-					name_list = name_string.split()
-					name_tuple = sorted(tuple(set(name_list)),key=str.lower)
-				else:
-					while name_string.count('"') > 1:
-						[first_part,name,second_part] = name_string.split('"',maxsplit=2)
-						if name.count(" ") > 4 or len(name) > 50:
-							print(f"The name {name} seems to be rather long, is this intended?")
-						name_list.append('"' + name.strip() + '"')
-						name_string = first_part + " " + second_part
-					name_list += name_string.split()
-					name_tuple = sorted(tuple(set(name_list)),key=str.lower)
-				if DONT_IGNORE_ISSUE["DUPLICATE_NAMES"] and len(name_tuple) != len(name_list):
-					for name in name_tuple:
-						name_list.remove(name)
-					print(f"The culture {culture} has the following {new_entry} multiple times: {name_list}")
-				if name_tuple:
-					culture_dictionary[culture_group][culture][new_entry] = " "
-			text = leftover
+						culture_dictionary[culture_group][culture][new_entry] = " "
+				text = leftover
 		# TODO maybe check the rest to see if brackets close properly and there is also nothing left otherwise.
 	culture_set = set()
 	for culture_group in culture_dictionary:
@@ -243,106 +244,108 @@ def get_religions(ENCODING):
 	religion_set = set()
 	COLOR_STRUCTURE = re.compile(r'(?=( color = \{ [0-1]{0,1}["."]{0,1}[0-9]{1,3} [0-1]{0,1}["."]{0,1}[0-9]{1,3} [0-1]{0,1}["."]{0,1}[0-9]{1,3} \} ))')
 	ICON_STRUCTURE = re.compile(r'(?=( icon = [0-9]{1,3} ))')
-	for files in os.listdir("common/religions"):
-		text = format_text_in_path("common/religions/" + files,ENCODING)
-		if text == "  ":
-			print(f"The file common/religions/{files} is either empty or has only comments in it, why not remove it?")
-			continue
-		colors = re.findall(COLOR_STRUCTURE,text)
-		icons = re.findall(ICON_STRUCTURE,text)
-		if len(colors) != len(icons):
-			print('A different number of "icon = ?" and " color = { ? ? ? }" strings has been found in ' + f"common/religions/{files}, specifically the icons:\n{icons}\nand colors:\n{colors}")
-			return [dict(),set()]
-		if text.find("{") < 5:
-			print(f"common/religions/{files} should start with a religious group, but the first bracket comes too soon.")
-			return [dict(),set()]
-		last_closing_bracket = -1
-		counter = 0
-		religion_group = religion = ""
-		for i in range(len(icons)):
-			icon_index = text.find(icons[i])
-			color_index = text.find(colors[i])
-			mindex = min(icon_index,color_index)
-			maxdex = max(icon_index + len(icons[i]), color_index + len(colors[i]))
-			for k in range(mindex):
-				if text[k] == "{":
-					if counter == 0:
-						if ( k - last_closing_bracket ) < 6:
-							print(f"When not inside brackets the first thing afterwards should be a religious group, but the first opening bracket in common/religions/{files} comes too soon.")
+	for root, dirs, files in os.walk("common/religions"):
+		for file in files:
+			text = format_text_in_path(os.path.join(root, file),ENCODING)
+			if text == "  ":
+				print(f"The file common/religions/{file} is either empty or has only comments in it, why not remove it?")
+				continue
+			colors = re.findall(COLOR_STRUCTURE,text)
+			icons = re.findall(ICON_STRUCTURE,text)
+			if len(colors) != len(icons):
+				print('A different number of "icon = ?" and " color = { ? ? ? }" strings has been found in ' + f"common/religions/{file}, specifically the icons:\n{icons}\nand colors:\n{colors}")
+				return [dict(),set()]
+			if text.find("{") < 5:
+				print(f"common/religions/{file} should start with a religious group, but the first bracket comes too soon.")
+				return [dict(),set()]
+			last_closing_bracket = -1
+			counter = 0
+			religion_group = religion = ""
+			for i in range(len(icons)):
+				icon_index = text.find(icons[i])
+				color_index = text.find(colors[i])
+				mindex = min(icon_index,color_index)
+				maxdex = max(icon_index + len(icons[i]), color_index + len(colors[i]))
+				for k in range(mindex):
+					if text[k] == "{":
+						if counter == 0:
+							if ( k - last_closing_bracket ) < 6:
+								print(f"When not inside brackets the first thing afterwards should be a religious group, but the first opening bracket in common/religions/{file} comes too soon.")
+								return [dict(),set()]
+							if text[k-3:k] == " = ":
+								religion_group = text[:k-3].rsplit(" ",maxsplit=1)[1]
+								if religion_group in religion_dictionary:
+									print(f"Duplicate religious group {religion_group} found in common/religions/{file}")
+								else:
+									religion_dictionary[religion_group] = dict()
+						elif counter == 1:
+							if text[k-3:k] == " = ":
+								religion = text[:k-3].rsplit(" ",maxsplit=1)[1]
+						counter += 1
+					elif text[k] == "}":
+						counter -= 1
+						last_closing_bracket = k
+						if counter == 0:
+							if religion_dictionary[religion_group] == dict():
+								print(f"Religion group {religion_group} has no religions.")
+							religion_group = ""
+						elif counter == 1:
+							religion = ""
+						elif counter < 0:
+							print(f"Brackets are wrong in common/religions/{file} specifically around {text[max(k-20,0):min(k+20,len(text))]}")
+				for k in range(mindex + 7,maxdex):
+					if text[k] == "{":
+						counter += 1
+					elif text[k] == "}":
+						counter -= 1
+						if counter < 2:
+							print(f"The religion {religion} lacks a color or an icon.")
 							return [dict(),set()]
-						if text[k-3:k] == " = ":
-							religion_group = text[:k-3].rsplit(" ",maxsplit=1)[1]
-							if religion_group in religion_dictionary:
-								print(f"Duplicate religious group {religion_group} found in common/religions/{files}")
-							else:
-								religion_dictionary[religion_group] = dict()
-					elif counter == 1:
-						if text[k-3:k] == " = ":
-							religion = text[:k-3].rsplit(" ",maxsplit=1)[1]
-					counter += 1
-				elif text[k] == "}":
-					counter -= 1
-					last_closing_bracket = k
-					if counter == 0:
-						if religion_dictionary[religion_group] == dict():
-							print(f"Religion group {religion_group} has no religions.")
-						religion_group = ""
-					elif counter == 1:
-						religion = ""
-					elif counter < 0:
-						print(f"Brackets are wrong in common/religions/{files} specifically around {text[max(k-20,0):min(k+20,len(text))]}")
-			for k in range(mindex + 7,maxdex):
-				if text[k] == "{":
-					counter += 1
-				elif text[k] == "}":
-					counter -= 1
-					if counter < 2:
-						print(f"The religion {religion} lacks a color or an icon.")
-						return [dict(),set()]
-			if religion in religion_dictionary[religion_group]:
-				print(f"Duplicate religion {religion} in religious group {religion_group} in common/religions/{files}")
-			else:
-				icon = icons[i].split(" ")[3]
-				color = tuple(colors[i].split(" ")[4:7]) #TODO divide by 255, if values above 1
-				religion_dictionary[religion_group][religion] = dict()
-				religion_dictionary[religion_group][religion]["icon"] = icon
-				religion_dictionary[religion_group][religion]["color"] = color
-				if religion in religion_set:
-					print(f"Religion {religion} is in two different religious groups.")
+				if religion in religion_dictionary[religion_group]:
+					print(f"Duplicate religion {religion} in religious group {religion_group} in common/religions/{file}")
 				else:
-					religion_set.add(religion)
-			text = text[maxdex:]
-		for k in range(len(text)):
-			if text[k] == "{":
-				if counter == 0:
-					print(f"After the last icon and color another opening bracket exists in common/religions/{files}")
-				counter += 1
-			elif text[k] == "}":
-				counter -= 1
-				if counter < 0:
-					print(f"Brackets are wrong in common/religions/{files} specifically around {text[max(k-20,0):min(k+20,len(text))]}")
-		if counter != 0:
-			print(f"Brackets are wrong and don't close properly at the end in common/religions/{files}.")
+					icon = icons[i].split(" ")[3]
+					color = tuple(colors[i].split(" ")[4:7]) #TODO divide by 255, if values above 1
+					religion_dictionary[religion_group][religion] = dict()
+					religion_dictionary[religion_group][religion]["icon"] = icon
+					religion_dictionary[religion_group][religion]["color"] = color
+					if religion in religion_set:
+						print(f"Religion {religion} is in two different religious groups.")
+					else:
+						religion_set.add(religion)
+				text = text[maxdex:]
+			for k in range(len(text)):
+				if text[k] == "{":
+					if counter == 0:
+						print(f"After the last icon and color another opening bracket exists in common/religions/{file}")
+					counter += 1
+				elif text[k] == "}":
+					counter -= 1
+					if counter < 0:
+						print(f"Brackets are wrong in common/religions/{file} specifically around {text[max(k-20,0):min(k+20,len(text))]}")
+			if counter != 0:
+				print(f"Brackets are wrong and don't close properly at the end in common/religions/{file}.")
 	return [religion_dictionary,religion_set]
 
 def get_governments(ENCODING):
 	government_set = set()
-	for files in os.listdir("common/governments"):
-		text = format_text_in_path("common/governments/" + files,ENCODING)
-		if text == "  ":
-			print(f"The file common/governments/{files} is either empty or has only comments in it, why not remove it?")
-			continue
-		while text.__contains__(" = {"):
-			if text.startswith(" = {"):
-				print(f'common/governments/{files} ended up starting with " = {{" while being evaluated: {text[:99]}')
+	for root, dirs, files in os.walk("common/governments"):
+		for file in files:
+			text = format_text_in_path(os.path.join(root, file),ENCODING)
+			if text == "  ":
+				print(f"The file common/governments/{file} is either empty or has only comments in it, why not remove it?")
+				continue
+			while text.__contains__(" = {"):
+				if text.startswith(" = {"):
+					print(f'common/governments/{file} ended up starting with " = {{" while being evaluated: {text[:99]}')
+					return set()
+				next_government = text.split(" = {",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1]
+				text = remove_text_between_brackets(text,next_government + " = {","common/governments/" + file)
+				if next_government != "pre_dharma_mapping":
+					government_set.add(next_government)
+			if text != "  ":
+				print(f"After evaluating common/governments/{file} there should be nothing left, but this is: {text[:99]}")
 				return set()
-			next_government = text.split(" = {",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1]
-			text = remove_text_between_brackets(text,next_government + " = {","common/governments/" + files)
-			if next_government != "pre_dharma_mapping":
-				government_set.add(next_government)
-		if text != "  ":
-			print(f"After evaluating common/governments/{files} there should be nothing left, but this is: {text[:99]}")
-			return set()
 	return government_set
 
 # gets all the text from ?.?.? = { text } for a specified date, including further occurances of it and returns them, but adds " # " between them or returns "#" if either the date entry is empty or none is found or an error occurs.
@@ -474,122 +477,123 @@ def get_sorted_dates(text,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_ISSUE):
 def check_country_files(CULTURE_SET,RELIGION_SET,GOVERNMENT_SET,START_DATE,ENCODING,DATE_STRUCTURE,DONT_IGNORE_ISSUE):
 	tag_dictionary = dict()
 	path_dictionary = dict()
-	for files in os.listdir("history/countries"):
-		tag = files[:3]
-		if re.fullmatch('[0-9A-Z]{3}',tag):
-			if tag in tag_dictionary:
-				print(f"Duplicate tag found in history/countries: {tag}")
+	for root, dirs, files in os.walk("history/countries"):
+		for file in files:
+			tag = file[:3]
+			if re.fullmatch('[0-9A-Z]{3}',tag):
+				if tag in tag_dictionary:
+					print(f"Duplicate tag found in history/countries: {tag}")
+				else:
+					tag_dictionary[tag] = "No path"
+					if tag == "REB" or tag == "NAT" or tag == "PIR":
+						continue
 			else:
-				tag_dictionary[tag] = "No path"
-				if tag == "REB" or tag == "NAT" or tag == "PIR":
-					continue
-		else:
-			print(f"Filename does not start with a valid country tag: {files}")
-			continue
-		path = "history/countries/" + files
-		text = format_text_in_path(path,ENCODING)
-		sorted_list = get_sorted_dates(text,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_ISSUE)
-		uniques = [[" government = ",""],[" primary_culture = ",""],[" religion = ",""],[" capital = ",""],[" technology_group = ",""]]
-		accepted_culture_list = []
-		added_accepted_culture_list = []
-		removed_accepted_culture_list = []
-		for date in sorted_list:
-			if date == "BASE_DATE":
-				date_text = get_base_date_text(text,sorted_list,path)
-			elif date == "START_DATE":
-				for index in range(len(uniques)):
-					if uniques[index][1] == "":
-						print(f'No valid " {uniques[index][0].strip()}" string was found until the start date in {path}')
-				if DONT_IGNORE_ISSUE["DATES_AFTER_START_DATE"]:
-					continue
-				break
-			else:
-				date_text = get_date_text(text,date,path)
-			if date_text == "#":
+				print(f"Filename does not start with a valid country tag: {file}")
 				continue
-			for index in range(len(uniques)):
-				if DONT_IGNORE_ISSUE["MISSING_EMPTY_SPACE"] and str(re.search(r'[^ _a-zA-Z]{1}' + uniques[index][0].strip(),date_text)) != "None":
-					print(f'"{uniques[index][0].strip()}" entry may not be recognised as it does not have an empty space in front of it in {path}')
-				counter = date_text.count(uniques[index][0])
-				if counter > 1:
-					print(f"{uniques[index][0].strip()} found {counter} times for date {date} in {path}")
-					uniques[index][1] = ""
-				if counter > 0:
-					uniques[index][1] = date_text.split(uniques[index][0],maxsplit=1)[1].split(" ",maxsplit=1)[0]
-					if index < 3:
-						if index == 0:
-							if uniques[index][1] not in GOVERNMENT_SET:
-								print(f"Government {uniques[index][1]} in {path} was not found in the common/governments files")
-								uniques[index][1] = ""
-						elif index == 1:
-							if uniques[index][1] not in CULTURE_SET:
-								print(f"Culture {uniques[index][1]} in {path} was not found in the common/cultures files")
-								uniques[index][1] = ""
-						elif index == 2:
-							if uniques[index][1] not in RELIGION_SET:
-								print(f"Religion {uniques[index][1]} in {path} was not found in the common/religions files")
-								uniques[index][1] = ""
+			path = os.path.join(root, file)
+			text = format_text_in_path(path,ENCODING)
+			sorted_list = get_sorted_dates(text,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_ISSUE)
+			uniques = [[" government = ",""],[" primary_culture = ",""],[" religion = ",""],[" capital = ",""],[" technology_group = ",""]]
+			accepted_culture_list = []
 			added_accepted_culture_list = []
 			removed_accepted_culture_list = []
-			add_culture_text = date_text # TODO maybe mention if an accepted culture is the primary culture
-			while add_culture_text.__contains__(" add_accepted_culture = "):
-				add_culture_text = add_culture_text.split(" add_accepted_culture = ",maxsplit=1)[1]
-				[culture,add_culture_text] = add_culture_text.split(" ",maxsplit=1)
-				add_culture_text = " " + add_culture_text
-				if culture in CULTURE_SET:
-					if culture in accepted_culture_list:
-						if DONT_IGNORE_ISSUE["DUPLICATE_CULTURES"] and (culture not in added_accepted_culture_list):
-							print(f"{culture} was already present as accepted culture for {date}, but added again in {path}")
-					else:
-						accepted_culture_list.append(culture)
-					if culture in added_accepted_culture_list:
-						if DONT_IGNORE_ISSUE["DUPLICATE_CULTURES"]:
-							print(f"{culture} was already added as accepted culture for {date}, but added again in {path}")
-					else:
-						added_accepted_culture_list.append(culture)
+			for date in sorted_list:
+				if date == "BASE_DATE":
+					date_text = get_base_date_text(text,sorted_list,path)
+				elif date == "START_DATE":
+					for index in range(len(uniques)):
+						if uniques[index][1] == "":
+							print(f'No valid " {uniques[index][0].strip()}" string was found until the start date in {path}')
+					if DONT_IGNORE_ISSUE["DATES_AFTER_START_DATE"]:
+						continue
+					break
 				else:
-					print(f"Invalid add_accepted_culture = {culture} found in {path}")
-			remove_culture_text = date_text
-			while remove_culture_text.__contains__(" remove_accepted_culture = "):
-				remove_culture_text = remove_culture_text.split(" remove_accepted_culture = ",maxsplit=1)[1]
-				[culture,remove_culture_text] = remove_culture_text.split(" ",maxsplit=1)
-				remove_culture_text = " " + remove_culture_text
-				if culture in CULTURE_SET:
-					if culture in accepted_culture_list:
-						accepted_culture_list.remove(culture)
+					date_text = get_date_text(text,date,path)
+				if date_text == "#":
+					continue
+				for index in range(len(uniques)):
+					if DONT_IGNORE_ISSUE["MISSING_EMPTY_SPACE"] and str(re.search(r'[^ _a-zA-Z]{1}' + uniques[index][0].strip(),date_text)) != "None":
+						print(f'"{uniques[index][0].strip()}" entry may not be recognised as it does not have an empty space in front of it in {path}')
+					counter = date_text.count(uniques[index][0])
+					if counter > 1:
+						print(f"{uniques[index][0].strip()} found {counter} times for date {date} in {path}")
+						uniques[index][1] = ""
+					if counter > 0:
+						uniques[index][1] = date_text.split(uniques[index][0],maxsplit=1)[1].split(" ",maxsplit=1)[0]
+						if index < 3:
+							if index == 0:
+								if uniques[index][1] not in GOVERNMENT_SET:
+									print(f"Government {uniques[index][1]} in {path} was not found in the common/governments files")
+									uniques[index][1] = ""
+							elif index == 1:
+								if uniques[index][1] not in CULTURE_SET:
+									print(f"Culture {uniques[index][1]} in {path} was not found in the common/cultures files")
+									uniques[index][1] = ""
+							elif index == 2:
+								if uniques[index][1] not in RELIGION_SET:
+									print(f"Religion {uniques[index][1]} in {path} was not found in the common/religions files")
+									uniques[index][1] = ""
+				added_accepted_culture_list = []
+				removed_accepted_culture_list = []
+				add_culture_text = date_text # TODO maybe mention if an accepted culture is the primary culture
+				while add_culture_text.__contains__(" add_accepted_culture = "):
+					add_culture_text = add_culture_text.split(" add_accepted_culture = ",maxsplit=1)[1]
+					[culture,add_culture_text] = add_culture_text.split(" ",maxsplit=1)
+					add_culture_text = " " + add_culture_text
+					if culture in CULTURE_SET:
+						if culture in accepted_culture_list:
+							if DONT_IGNORE_ISSUE["DUPLICATE_CULTURES"] and (culture not in added_accepted_culture_list):
+								print(f"{culture} was already present as accepted culture for {date}, but added again in {path}")
+						else:
+							accepted_culture_list.append(culture)
+						if culture in added_accepted_culture_list:
+							if DONT_IGNORE_ISSUE["DUPLICATE_CULTURES"]:
+								print(f"{culture} was already added as accepted culture for {date}, but added again in {path}")
+						else:
+							added_accepted_culture_list.append(culture)
 					else:
-						if DONT_IGNORE_ISSUE["REMOVE_NON_EXISTANT_CULTURE"] and (culture not in removed_accepted_culture_list):
-							print(f"{culture} is not an accepted culture for {date}, but removed in {path}")
-					if culture in removed_accepted_culture_list:
-						if DONT_IGNORE_ISSUE["DUPLICATE_REMOVAL_CULTURE"]:
-							print(f"{culture} was already removed as accepted culture for {date}, but removed again in {path}")
+						print(f"Invalid add_accepted_culture = {culture} found in {path}")
+				remove_culture_text = date_text
+				while remove_culture_text.__contains__(" remove_accepted_culture = "):
+					remove_culture_text = remove_culture_text.split(" remove_accepted_culture = ",maxsplit=1)[1]
+					[culture,remove_culture_text] = remove_culture_text.split(" ",maxsplit=1)
+					remove_culture_text = " " + remove_culture_text
+					if culture in CULTURE_SET:
+						if culture in accepted_culture_list:
+							accepted_culture_list.remove(culture)
+						else:
+							if DONT_IGNORE_ISSUE["REMOVE_NON_EXISTANT_CULTURE"] and (culture not in removed_accepted_culture_list):
+								print(f"{culture} is not an accepted culture for {date}, but removed in {path}")
+						if culture in removed_accepted_culture_list:
+							if DONT_IGNORE_ISSUE["DUPLICATE_REMOVAL_CULTURE"]:
+								print(f"{culture} was already removed as accepted culture for {date}, but removed again in {path}")
+						else:
+							removed_accepted_culture_list.append(culture)
+						if culture in added_accepted_culture_list:
+							print(f"{culture} is added and removed as accepted culture for {date} in {path}")
+							added_accepted_culture_list.remove(culture)
 					else:
-						removed_accepted_culture_list.append(culture)
-					if culture in added_accepted_culture_list:
-						print(f"{culture} is added and removed as accepted culture for {date} in {path}")
-						added_accepted_culture_list.remove(culture)
-				else:
-					print(f"Invalid remove_accepted_culture = {culture} found for {date} in {path}")
-	for files in os.listdir("common/country_tags"):
-		path = "common/country_tags/" + files
-		text = format_text_in_path(path,ENCODING)
-		if text == "  ":
-			print(f"The file common/country_tags/{files} is either empty or has only comments in it, why not remove it?")
-			continue
-		for tag in tag_dictionary.keys():
-			while text.__contains__(tag + ' = "countries/'):
-				if tag_dictionary[tag] != "No path":
-					print(f'{tag} = "countries/ is at least twice in the files in the common/country_tags folder')
-				[first,second] = text.split(tag + ' = "countries/',maxsplit=1)
-				[country_path,second] = second.split('"',maxsplit=1)
-				if country_path not in path_dictionary:
-					tag_dictionary[tag] = country_path
-					path_dictionary[country_path] = tag
-				else:
-					print(f"In common/country_tags a path is used twice: {country_path}")
-				text = first + second
-		if "" != text.strip():
-			print(f"Not all paths have been used by a tag in {path} specifically the following are left: {text.strip()}")
+						print(f"Invalid remove_accepted_culture = {culture} found for {date} in {path}")
+	for root, dirs, files in os.walk("common/country_tags"):
+		for file in files:
+			text = format_text_in_path(os.path.join(root, file),ENCODING)
+			if text == "  ":
+				print(f"The file common/country_tags/{file} is either empty or has only comments in it, why not remove it?")
+				continue
+			for tag in tag_dictionary.keys():
+				while text.__contains__(tag + ' = "countries/'):
+					if tag_dictionary[tag] != "No path":
+						print(f'{tag} = "countries/ is at least twice in the files in the common/country_tags folder')
+					[first,second] = text.split(tag + ' = "countries/',maxsplit=1)
+					[country_path,second] = second.split('"',maxsplit=1)
+					if country_path not in path_dictionary:
+						tag_dictionary[tag] = country_path
+						path_dictionary[country_path] = tag
+					else:
+						print(f"In common/country_tags a path is used twice: {country_path}")
+					text = first + second
+			if "" != text.strip():
+				print(f"Not all paths have been used by a tag in {os.path.join(root, file)} specifically the following are left: {text.strip()}")
 	if "No path" in tag_dictionary.values():
 		tags_without_path = []
 		for tag in tag_dictionary:
@@ -597,15 +601,16 @@ def check_country_files(CULTURE_SET,RELIGION_SET,GOVERNMENT_SET,START_DATE,ENCOD
 				tags_without_path.append(tag)
 		print(f"No path has been set in common/country_tags for these tags from history/countries: {tags_without_path}")
 	COLOR_STRUCTURE = re.compile(r'(?=( color = \{ [0-9]{1,3} [0-9]{1,3} [0-9]{1,3} \} ))')
-	for files in os.listdir("common/countries"):
-		if files not in path_dictionary:
-			print(f"{files} in common/countries is not used as path in common/country_tags by any of the tags in history/countries or some other error occured")
-		text = format_text_in_path("common/countries/" + files,ENCODING)
-		colors = re.findall(COLOR_STRUCTURE,text)
-		if len(colors) != 1:
-			print(f"The country in common/countries/{files} has either no color or multiple.")
-		if text.count(" graphical_culture =") != 1:
-			print(f"The country in common/countries/{files} has either no graphical culture or multiple.")
+	for root, dirs, files in os.walk("common/countries"):
+		for file in files:
+			if file not in path_dictionary:
+				print(f"{file} in common/countries is not used as path in common/country_tags by any of the tags in history/countries or some other error occured")
+			text = format_text_in_path(os.path.join(root, file),ENCODING)
+			colors = re.findall(COLOR_STRUCTURE,text)
+			if len(colors) != 1:
+				print(f"The country in common/countries/{file} has either no color or multiple.")
+			if text.count(" graphical_culture =") != 1:
+				print(f"The country in common/countries/{file} has either no graphical culture or multiple.")
 	missing_paths = []
 	for path in tag_dictionary.values():
 		if path != "No path" and not os.path.exists("common/countries/" + path):
@@ -617,22 +622,23 @@ def check_country_files(CULTURE_SET,RELIGION_SET,GOVERNMENT_SET,START_DATE,ENCOD
 
 def check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,START_DATE,ENCODING,DATE_STRUCTURE,WATER_INDEX,DONT_IGNORE_ISSUE):
 	province_set = set()
-	for files in os.listdir("history/provinces"):
-		if files[0] not in "123456789":
-			print(f"Province file name does not start with a number from 1 to 9 in history/provinces/{files}")
-			continue
-		path = "history/provinces/" + files
-		text = format_text_in_path(path,ENCODING)
-		sorted_list = get_sorted_dates(text,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_ISSUE)
-		check_date_entries(text,sorted_list,path,CULTURE_SET,RELIGION_SET,TAG_SET,DONT_IGNORE_ISSUE)
-		province_ID = ""
-		while files[0] in "0123456789": 
-			province_ID += files[0]
-			files = files[1:]
-		if int(province_ID) not in province_set:
-			province_set.add(int(province_ID))
-		else:
-			print(f'At least 2 files have the same province ID "{province_ID}" in history/provinces.')
+	for root, dirs, files in os.walk("history/provinces"):
+		for file in files:
+			if file[0] not in "123456789":
+				print(f"Province file name does not start with a number from 1 to 9 in history/provinces/{file}")
+				continue
+			path = os.path.join(root, file)
+			text = format_text_in_path(path,ENCODING)
+			sorted_list = get_sorted_dates(text,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_ISSUE)
+			check_date_entries(text,sorted_list,path,CULTURE_SET,RELIGION_SET,TAG_SET,DONT_IGNORE_ISSUE)
+			province_ID = ""
+			while file[0] in "0123456789": 
+				province_ID += file[0]
+				file = file[1:]
+			if int(province_ID) not in province_set:
+				province_set.add(int(province_ID))
+			else:
+				print(f'At least 2 files have the same province ID "{province_ID}" in history/provinces.')
 	province_tuple = tuple(sorted(province_set, key=int))
 	counter = 0
 	if DONT_IGNORE_ISSUE["MISSING_PROVINCE_ID"]:
