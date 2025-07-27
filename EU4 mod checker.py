@@ -22,7 +22,8 @@ def mod_specific_values():
 		"DUPLICATE_REMOVAL_CULTURE":True, # Cultures may be removed twice for the same date, which does nothing, so you can ignore this.
 		"REMOVE_NON_EXISTANT_CULTURE":True, # Sometimes cultures are removed as accepted cultures, even though they were not accepted at this date. So maybe some other culture was actually supposed to be removed.
 		"MISSING_PROVINCE_FILE":True, # Some provinces may be placed on a continent or such, but lack a province file, can be ignored as an empty "provinceID.txt" file will simply be generated anyway for the output.
-		"MISSING_PROVINCE_ID":True # While it is not necessary to use all numbers between 1 and the number of provinces as IDs, maybe you still want to add empty files for such cases, if not you can set it to False.
+		"MISSING_PROVINCE_ID":True, # While it is not necessary to use all numbers between 1 and the number of provinces as IDs, maybe you still want to add empty files for such cases, if not you can set it to False.
+		"NAME_POSITION":False # The position of the name could be outside of the province, though this currently does not matter for conversion to a Victoria 2 mod.
 	}
 	I_READ_THE_INSTRUCTIONS = False # Set this to True after changing all the settings you need to change or want to change and that's it. Now you can run it, if you have a sufficiently new Python version installed. Maybe anything after 3.7 will work, as well as a new enough Pillow version (Python Imaging Library).
 	return [START_DATE,ENCODING,WATER_INDEX,DONT_IGNORE_ISSUE,I_READ_THE_INSTRUCTIONS]
@@ -72,13 +73,13 @@ def verify_date(date):
 	if months == 2:
 		if days == 29:
 			print(f"29th February is not a valid date in OpenVic, so {date} will be changed to {years}.{months}.28 instead.")
-			return(f"{years}.{months}.28")
+			return f"{years}.{months}.28"
 		elif days == 30 or days == 31:
 			print(f"{days}th February? Really?")
 			return "1444.11.11"
-	return(f"{years}.{months}.{days}")
+	return f"{years}.{months}.{days}"
 
-# replace everything with " " between all occurances of a given string ending with a {, including that string, until the brackets close again and return the new string or "#" if an error occurs.
+# Remove everything between all occurances of a given string ending with a {, including that string, until the brackets close again and return the new string or "#" if an error occurs. Due to the formatting adding an empty space before and after any } there will still be an empty space between the now connected parts.
 def remove_text_between_brackets(text,sub_string,path):
 	while text.__contains__(sub_string):
 		[prior_text,leftover] = text.split(sub_string,maxsplit=1)
@@ -381,7 +382,7 @@ def get_base_date_text(text,sorted_list,path):
 			return "#"
 		return text
 	for date in sorted_list:
-		if date == "START_DATE":
+		if date == "BASE_DATE" or date == "START_DATE":
 			continue
 		next_date = re.search(r'[^-0-9]{1}' + date + " = {",text)
 		while str(next_date) != "None":
@@ -415,18 +416,18 @@ def get_sorted_dates(text,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_ISSUE):
 		[years,months,days] = date.split(".")
 		text = text[next_date.end():]
 		next_date = DATE_STRUCTURE.search(text)
-		counter = 1
-		for i in range(len(text)):
-			if text[i] == "{":
-				counter += 1
-			elif text[i] == "}":
-				counter -= 1
-				if counter == 0:
-					if "None" != str(next_date):
+		if "None" != str(next_date):
+			counter = 1
+			for i in range(len(text)):
+				if text[i] == "{":
+					counter += 1
+				elif text[i] == "}":
+					counter -= 1
+					if counter == 0:
 						if next_date.end() < i:
 							print(f"There was a date within the date {date} in {path}")
 							return "#"
-					break
+						break
 		if int(years) < -32768 or int(years) > 32767:
 			print(f"{date} is not a valid date as OpenVic does not support years beyond -32768 to 32767 or -2^15 to 2^15 - 1. Sucks for Warhammer 40k fans in: {path}")
 			continue
@@ -809,7 +810,7 @@ def check_continents(province_set,ENCODING,WATER_INDEX,DONT_IGNORE_ISSUE):
 			print(f"In map/default.map max_provinces = {max_provinces} is not an integer value.")
 		elif len(pixel_set) + 1 != int(max_provinces):
 			print(f"The max_provinces value {max_provinces} in the map/default.map should be 1 higher than the number of different colors in the province.bmp {len(pixel_set)}.")
-	RGB_DICTIONARY = check_definition_csv(ENCODING)
+	[DEFINITIONS_DICTIONARY,RGB_DICTIONARY] = check_definition_csv(ENCODING)
 	province_colors_are_in_definition_csv = True
 	if pixel_set.difference(RGB_DICTIONARY.keys()):
 		province_colors_are_in_definition_csv = False
@@ -846,7 +847,7 @@ def check_continents(province_set,ENCODING,WATER_INDEX,DONT_IGNORE_ISSUE):
 		else:
 			print("Whether some Terrain pixels are water or not, while the province it belongs to is the other could not be checked due to colors in the provinces.bmp that are not in the definition.csv")
 	text = format_text_in_path("map/climate.txt",ENCODING)
-	climate_impassable_exists = False
+	impassable = set()
 	while text.__contains__(" = {"):
 		[climate_name,text] = text.split(" = {",maxsplit=1)
 		[provinces,text] = text.split("}",maxsplit=1)
@@ -862,10 +863,9 @@ def check_continents(province_set,ENCODING,WATER_INDEX,DONT_IGNORE_ISSUE):
 			if entry in lakes:
 				print(f"Province {entry} is a lake, but also has the climate {climate_name}.")
 		if climate_name == "impassable":
-			climate_impassable_exists = True
-			check_area(combined_continent_set,lakes,provinces,ENCODING)
-	if not climate_impassable_exists:
-		check_area(combined_continent_set,lakes,set(),ENCODING)
+			impassable = provinces
+	check_area(combined_continent_set,lakes,impassable,ENCODING)
+	check_positions(ocean,lakes,impassable,pixel_set,DEFINITIONS_DICTIONARY,ENCODING,DONT_IGNORE_ISSUE)
 	return
 
 def check_area(combined_continent_set,lakes,impassable,ENCODING):
@@ -924,7 +924,198 @@ def check_definition_csv(ENCODING):
 				pass
 			else:
 				print(f"In map/definition.csv this line has to change or be removed: {line.strip()}")
-	return RGB_dictionary
+	return [definitions_dictionary,RGB_dictionary]
+
+def check_positions(OCEAN_SET,LAKES_SET,IMPASSABLE_SET,pixel_set,DEFINITIONS_DICTIONARY,ENCODING,DONT_IGNORE_ISSUE):
+	unimportant = (0,0,0)
+	if unimportant in pixel_set:
+		for b in range(256):
+			for g in range(256):
+				for r in range(6,256):
+					if (r,g,b) not in pixel_set:
+						unimportant = (r,g,b)
+						break
+				if unimportant not in pixel_set:
+					break
+			if unimportant not in pixel_set:
+				break
+	ocean = (0,0,1)
+	if ocean in pixel_set:
+		for r in range(4):
+			for g in range(256):
+				for b in range(2,256):
+					if (r,g,b) not in pixel_set:
+						ocean = (r,g,b)
+						break
+				if ocean not in pixel_set:
+					break
+			if ocean not in pixel_set:
+				break
+	if unimportant == ocean or ocean in pixel_set or unimportant in pixel_set:
+		print(f'A mod with over 65536 Provinces wont work.')
+		return
+	OCEAN_RGB_SET = set()
+	for provinceID in OCEAN_SET:
+		if str(provinceID) in DEFINITIONS_DICTIONARY:
+			OCEAN_RGB_SET.add(DEFINITIONS_DICTIONARY[str(provinceID)])
+		else:
+			print(f"The province ID {provinceID} is not found in the map/definition.csv file, but it is an ocean.")
+	UNIMPORTANT_RGB_SET = set()
+	for provinceID in LAKES_SET:
+		if str(provinceID) in DEFINITIONS_DICTIONARY:
+			UNIMPORTANT_RGB_SET.add(DEFINITIONS_DICTIONARY[str(provinceID)])
+		else:
+			print(f"The province ID {provinceID} is not found in the map/definition.csv file, but it is a lake.")
+	for provinceID in IMPASSABLE_SET:
+		if str(provinceID) in DEFINITIONS_DICTIONARY:
+			UNIMPORTANT_RGB_SET.add(DEFINITIONS_DICTIONARY[str(provinceID)])
+		else:
+			print(f"The province ID {provinceID} is not found in the map/definition.csv file, but it is impassable.")
+	positions = format_text_in_path("map/positions.txt",ENCODING)
+	image_load_original = Image.open("map/provinces.bmp").load()
+	image = Image.open("map/provinces.bmp").copy()
+	w,h = image.size
+	image_load = image.load()
+	for x in range(w):
+		for y in range(h):
+			if image_load[x,y] in OCEAN_RGB_SET:
+				image_load[x,y] = ocean
+			elif image_load[x,y] in UNIMPORTANT_RGB_SET:
+				image_load[x,y] = unimportant
+	OCEAN_OR_UNIMPORTANT = {ocean,unimportant}
+	if image_load[0,0] in OCEAN_OR_UNIMPORTANT:
+		last_was_continental_and_unimportant = False
+	elif ocean not in {image_load[0,1],image_load[1,0],image_load[1,1]}:
+		image_load[0,0] = unimportant
+		last_was_continental_and_unimportant = True
+	else:
+		last_was_continental_and_unimportant = False
+	for y in range(1,h-1):
+		if image_load[0,y] in OCEAN_OR_UNIMPORTANT:
+			last_was_continental_and_unimportant = False
+		elif last_was_continental_and_unimportant:
+			if ocean not in {image_load[0,y+1],image_load[1,y+1]}:
+				image_load[0,y] = unimportant
+			else:
+				last_was_continental_and_unimportant = False
+		elif ocean not in {image_load[0,y-1],image_load[0,y+1],image_load[1,y-1],image_load[1,y],image_load[1,y+1]}:
+			image_load[0,y] = unimportant
+			last_was_continental_and_unimportant = True
+	if image_load[0,h-1] in OCEAN_OR_UNIMPORTANT:
+		pass
+	elif last_was_continental_and_unimportant:
+		image_load[0,h-1] = unimportant
+	elif ocean not in {image_load[0,h-2],image_load[1,h-2],image_load[1,h-1]}:
+		image_load[0,h-1] = unimportant
+	for x in range(1,w-1):
+		if image_load[x,0] in OCEAN_OR_UNIMPORTANT:
+			last_was_continental_and_unimportant = False
+		elif ocean not in {image_load[x-1,0],image_load[x-1,1],image_load[x,1],image_load[x+1,0],image_load[x+1,1]}:
+			image_load[x,0] = unimportant
+			last_was_continental_and_unimportant = True
+		else:
+			last_was_continental_and_unimportant = False
+		for y in range(1,h-1):
+			if image_load[x,y] in OCEAN_OR_UNIMPORTANT:
+				last_was_continental_and_unimportant = False
+			elif last_was_continental_and_unimportant:
+				if ocean not in {image_load[x-1,y+1],image_load[x,y+1],image_load[x+1,y+1]}:
+					image_load[x,y] = unimportant
+				else:
+					last_was_continental_and_unimportant = False
+			elif ocean not in {image_load[x-1,y-1],image_load[x-1,y],image_load[x-1,y+1],image_load[x,y-1],image_load[x,y+1],image_load[x+1,y-1],image_load[x+1,y],image_load[x+1,y+1]}:
+				image_load[x,y] = unimportant
+				last_was_continental_and_unimportant = True
+		if image_load[x,h-1] in OCEAN_OR_UNIMPORTANT:
+			pass
+		elif last_was_continental_and_unimportant:
+			image_load[x,h-1] = unimportant
+		elif ocean not in {image_load[x-1,h-2],image_load[x-1,h-1],image_load[x,h-2],image_load[x+1,h-2],image_load[x+1,h-1]}:
+			image_load[x,h-1] = unimportant
+	if image_load[w-1,0] in OCEAN_OR_UNIMPORTANT:
+		last_was_continental_and_unimportant = False
+	elif ocean not in {image_load[w-2,0],image_load[w-2,1],image_load[w-1,1]}:
+		image_load[w-1,0] = unimportant
+		last_was_continental_and_unimportant = True
+	else:
+		last_was_continental_and_unimportant = False
+	for y in range(1,h-1):
+		if image_load[w-1,y] in OCEAN_OR_UNIMPORTANT:
+			last_was_continental_and_unimportant = False
+		elif last_was_continental_and_unimportant:
+			if ocean not in {image_load[w-2,y+1],image_load[w-1,y+1]}:
+				image_load[w-1,y] = unimportant
+			else:
+				last_was_continental_and_unimportant = False
+		elif ocean not in {image_load[w-2,y-1],image_load[w-2,y],image_load[w-2,y+1],image_load[w-1,y-1],image_load[w-1,y+1]}:
+			image_load[w-1,y] = unimportant
+			last_was_continental_and_unimportant = True
+	if image_load[w-1,h-1] in OCEAN_OR_UNIMPORTANT:
+		pass
+	elif last_was_continental_and_unimportant:
+		image_load[w-1,h-1] = unimportant
+	elif ocean not in {image_load[w-2,h-2],image_load[w-2,h-1],image_load[w-1,h-2]}:
+		image_load[w-1,h-1] = unimportant
+	coastal_pixel_set = set()
+	for x in range(w):
+		for y in range(h):
+			coastal_pixel_set.add(image_load[x,y])
+	while positions.__contains__("position = { "):
+		[provinceID,positions] = positions.split("position = { ",maxsplit=1)
+		counter = 1
+		for index in range(len(provinceID) - 1,4,-1):
+			if provinceID[index] == "}":
+				counter += 1
+			elif provinceID[index] == "{":
+				counter -= 1
+				if counter == 0:
+					provinceID = provinceID[:index-3].rsplit(" ",maxsplit=1)[1]
+					break
+		else:
+			print(f"Due to the brackets being wrong no province ID could be found in {provinceID}")
+			continue
+		if int(provinceID) in IMPASSABLE_SET or int(provinceID) in LAKES_SET or int(provinceID) in OCEAN_SET:
+			continue
+		[city_x,city_y,unit_x,unit_y,name_x,name_y,port_x,port_y,positions] = positions.split(" ",maxsplit=8)
+		if int(float(city_x)) < 0 or int(float(city_y)) < 0 or int(float(city_x)) >= w or int(float(city_y)) >= h:
+			print(f"The city position {city_x},{city_y} for province {provinceID} is outside the provinces.bmp with size {w},{h}.")
+			city_x = city_y = -1
+		if int(float(unit_x)) < 0 or int(float(unit_y)) < 0 or int(float(unit_x)) >= w or int(float(unit_y)) >= h:
+			print(f"The unit position {unit_x},{unit_y} for province {provinceID} is outside the provinces.bmp with size {w},{h}.")
+			unit_x = unit_y = -1
+		if int(float(name_x)) < 0 or int(float(name_y)) < 0 or int(float(name_x)) >= w or int(float(name_y)) >= h:
+			print(f"The name position {name_x},{name_y} for province {provinceID} is outside the provinces.bmp with size {w},{h}.")
+			name_x = name_y = -1
+		if int(float(port_x)) < 0 or int(float(port_y)) < 0 or int(float(port_x)) >= w or int(float(port_y)) >= h:
+			print(f"The port position {port_x},{port_y} for province {provinceID} is outside the provinces.bmp with size {w},{h}.")
+			continue
+		if provinceID not in DEFINITIONS_DICTIONARY:
+			print(f"The province ID {provinceID} is not found in the map/definition.csv file, but a position for it exists.")
+			continue
+		if city_x != -1 and city_y != -1:
+			if image_load_original[int(float(city_x)),int(h-1 - float(city_y))] != DEFINITIONS_DICTIONARY[provinceID]:
+				print(f"The rounded position {int(float(city_x))},{int(float(city_y))} of the city model, which is {int(float(city_x))},{int(h-1 - float(city_y))} when opening the bmp with GIMP, for province {provinceID} is not within the province itself.")
+		if unit_x != -1 and unit_y != -1:
+			if image_load_original[int(float(unit_x)),int(h-1 - float(unit_y))] != DEFINITIONS_DICTIONARY[provinceID]:
+				print(f"The rounded position {int(float(unit_x))},{int(float(unit_y))} of the unit model, which is {int(float(unit_x))},{int(h-1 - float(unit_y))} when opening the bmp with GIMP, for province {provinceID} is not within the province itself.")
+		if DONT_IGNORE_ISSUE["NAME_POSITION"] and name_x != -1 and name_y != -1:
+			if image_load_original[int(float(name_x)),int(h-1 - float(name_y))] != DEFINITIONS_DICTIONARY[provinceID]:
+				print(f"The rounded position {int(float(name_x))},{int(float(name_y))} of the province name, which is {int(float(name_x))},{int(h-1 - float(name_y))} when opening the bmp with GIMP, for province {provinceID} is not within the province itself.")
+		if DEFINITIONS_DICTIONARY[provinceID] not in coastal_pixel_set:
+			continue
+		port_x = int(float(port_x))
+		port_y = int(h-1 - float(port_y))
+		coastal_nearby = False
+		for x in range(-2,2):
+			for y in range(-2,2):
+				if image_load_original[max(0,min(w-1,port_x+x)),max(0,min(h-1,port_y+y))] == DEFINITIONS_DICTIONARY[provinceID]:
+					coastal_nearby = True
+					break
+			if coastal_nearby:
+				break
+		if not coastal_nearby:
+			print(f"There is no coastal province within a 2 pixel radius of the rounded port position {port_x},{h-port_y} for province {provinceID}, which would be {port_x},{port_y} in GIMP")
+	return
 
 [START_DATE,ENCODING,WATER_INDEX,DONT_IGNORE_ISSUE,I_READ_THE_INSTRUCTIONS] = mod_specific_values()
 if not  I_READ_THE_INSTRUCTIONS:
