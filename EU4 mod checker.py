@@ -1151,6 +1151,94 @@ def check_localisation(PROVINCE_SET,AREA_SET,LOCALISATION_FILES):
 		print(f"No localisation files were entered, so no checks were made.")
 	return
 
+def check_rivers():
+	image = Image.open("map/rivers.bmp").copy()
+	w,h = image.size
+	load_bmp = image.load()
+	for x in range(w):
+		for y in range(h):
+			if load_bmp[x,y] == 0:
+				started_from_index = 0
+				current_river_pixel = (x,y)
+				river_source = current_river_pixel
+				check_for_more = True
+				tributary_rivers = []
+				while check_for_more:
+					load_bmp[current_river_pixel] = 255
+					(a,b) = current_river_pixel
+					counter = 0
+					tributary_rivers_counter = 0
+					for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
+						nx, ny = a + dx, b + dy
+						if 0 <= nx < w and 0 <= ny < h:
+							if 2 < load_bmp[nx,ny] < 254:
+								counter += 1
+								current_river_pixel = (nx,ny)
+							elif 0 < load_bmp[nx,ny] < 3:
+								tributary_rivers.append((nx,ny))
+								tributary_rivers_counter += 1
+								if river_source == (a,b):
+									print(f"There are 2 yellow or red pixels next to each other at {a},{b}.")
+							elif 0 == load_bmp[nx,ny]:
+								print(f"The river starting at {nx},{ny} is connected to another starting point.")
+					if counter == 1:
+						pass
+					elif counter > 1:
+						if started_from_index != 0:
+							print(f"A river should only have a single source/green pixel attached to it, all the rivers merging into it should not have one, but one of the rivers near {a},{b} seems to have this problem.")
+							if (abs(river_source[0]-a) + abs(river_source[1]-b)) == 1:
+								load_bmp[a,b] = 3 # Going in from a tributary or distributary river would cut a river in half, so it has to be reconnected again.
+							if tributary_rivers:
+								current_river_pixel = tributary_rivers[0]
+								river_source = current_river_pixel
+								started_from_index = load_bmp[current_river_pixel]
+								tributary_rivers.remove(tributary_rivers[0])
+							else:
+								check_for_more = False
+						else:
+							print(f"Next to the position {current_river_pixel} is a river with 3 nearby river pixels or 2 and a green start position.")
+							tributary_rivers.append((a,b))
+					else:
+						if tributary_rivers_counter > 0 and started_from_index == (load_bmp[tributary_rivers[len(tributary_rivers)-1]]):
+							if started_from_index == 1:
+								print(f"Both the start and end point of the tributary river containing {tributary_rivers[len(tributary_rivers)-1]} are merged into another river.")
+							else:
+								print(f"Both the start and end point of the distributary river containing {tributary_rivers[len(tributary_rivers)-1]} are split from another river.")
+						if tributary_rivers:
+							current_river_pixel = tributary_rivers[0]
+							river_source = current_river_pixel
+							started_from_index = load_bmp[current_river_pixel]
+							tributary_rivers.remove(tributary_rivers[0])
+						else:
+							check_for_more = False
+	for x in range(w):
+		for y in range(h):
+			if load_bmp[x,y] < 254:
+				print(f"The following river pixel should either lack a source or is not properly connected with the main river at {x},{y}.")
+				check_for_more = True
+				current_river_pixel = (x,y)
+				tributary_rivers = []
+				while check_for_more:
+					load_bmp[current_river_pixel] = 255
+					(a,b) = current_river_pixel
+					counter = 0
+					for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
+						nx, ny = a + dx, b + dy
+						if 0 <= nx < w and 0 <= ny < h:
+							if load_bmp[nx,ny] < 254:
+								counter += 1
+								current_river_pixel = (nx,ny)
+					if counter == 1:
+						pass
+					elif counter > 1:
+						tributary_rivers.append((a,b))
+					elif tributary_rivers:
+						current_river_pixel = tributary_rivers[0]
+						tributary_rivers.remove(tributary_rivers[0])
+					else:
+						check_for_more = False
+	return
+
 [START_DATE,ENCODING,WATER_INDEX,LOCALISATION_FILES,DONT_IGNORE_ISSUE,I_READ_THE_INSTRUCTIONS] = mod_specific_values()
 if not  I_READ_THE_INSTRUCTIONS:
 	print("READ AND FOLLOW THE INSTRUCTIONS AT THE START OF THE FILE! For some mods you still have to make minimal changes yourself.")
@@ -1163,6 +1251,7 @@ else:
 		DATE_STRUCTURE = re.compile(r'[^-0-9]{1}[-]{0,1}[0-9]{1,5}["."][0-9]{1,2}["."][0-9]{1,2} = {')
 		[TAG_SET,TAG_DICTIONARY] = check_country_files(CULTURE_SET,RELIGION_SET,GOVERNMENT_SET,START_DATE,ENCODING,DATE_STRUCTURE,DONT_IGNORE_ISSUE)
 		check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,START_DATE,ENCODING,DATE_STRUCTURE,WATER_INDEX,LOCALISATION_FILES,DONT_IGNORE_ISSUE)
+		check_rivers()
 	else:
 		if not CULTURE_SET:
 			print(f"No cultures could be found in the common/cultures folder.")
