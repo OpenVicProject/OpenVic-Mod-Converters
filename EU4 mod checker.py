@@ -1178,14 +1178,14 @@ def check_rivers():
 								tributary_rivers.append((nx,ny))
 								tributary_rivers_counter += 1
 								if river_source == (a,b):
-									print(f"There are 2 yellow or red pixels next to each other at {a},{b}.")
+									print(f"{a},{b} there are 2 yellow or red pixels next to each other.")
 							elif 0 == load_bmp[nx,ny]:
-								print(f"The river starting at {nx},{ny} is connected to another starting point.")
+								print(f"{nx},{ny} the river starting here is connected to another starting point.")
 					if counter == 1:
 						pass
 					elif counter > 1:
 						if started_from_index != 0:
-							print(f"A river should only have a single source/green pixel attached to it, all the rivers merging into it should not have one, but one of the rivers near {a},{b} seems to have this problem.")
+							print(f"{a},{b} a river should only have a single source/green pixel attached to it, all the rivers merging into it should not have one, but one of the rivers here seems to have this problem.")
 							if (abs(river_source[0]-a) + abs(river_source[1]-b)) == 1:
 								load_bmp[a,b] = 3 # Going in from a tributary or distributary river would cut a river in half, so it has to be reconnected again.
 							if tributary_rivers:
@@ -1196,14 +1196,14 @@ def check_rivers():
 							else:
 								check_for_more = False
 						else:
-							print(f"Next to the position {current_river_pixel} is a river with 3 nearby river pixels or 2 and a green start position.")
+							print(f"{current_river_pixel} has 3 nearby river pixels or 2 and a green start position.")
 							tributary_rivers.append((a,b))
 					else:
 						if tributary_rivers_counter > 0 and started_from_index == (load_bmp[tributary_rivers[len(tributary_rivers)-1]]):
 							if started_from_index == 1:
-								print(f"Both the start and end point of the tributary river containing {tributary_rivers[len(tributary_rivers)-1]} are merged into another river.")
+								print(f"{tributary_rivers[len(tributary_rivers)-1]} both the start and end point of the tributary river are merged into another river.")
 							else:
-								print(f"Both the start and end point of the distributary river containing {tributary_rivers[len(tributary_rivers)-1]} are split from another river.")
+								print(f"{tributary_rivers[len(tributary_rivers)-1]} both the start and end point of the distributary river are split from another river.")
 						if tributary_rivers:
 							current_river_pixel = tributary_rivers[0]
 							river_source = current_river_pixel
@@ -1214,7 +1214,7 @@ def check_rivers():
 	for x in range(w):
 		for y in range(h):
 			if load_bmp[x,y] < 254:
-				print(f"The following river pixel should either lack a source or is not properly connected with the main river at {x},{y}.")
+				print(f"{x},{y} this river pixel should either lack a source or is not properly connected with the main river.")
 				check_for_more = True
 				current_river_pixel = (x,y)
 				tributary_rivers = []
