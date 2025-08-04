@@ -7,10 +7,15 @@ import os
 def mod_specific_values():
 	START_DATE = "1444.11.11" # Replace 1444.11.11 with the intended start date in the form years.months.days, unless it would either be a 29th February as those do neither exist in OpenVic nor Victoria 2 and will be replaced with 28th February and for OpenVic it must be a date within the range -32768.1.1 to 32767.12.31 or if the output is intended for Victoria 2, i assume dates must be after 1.1.1 or even later, but i am not sure about the exact details. Any input that is not valid will be replaced with 1444.11.11. The history will be applied until the start date, including identical dates like 01444.11.11 and error messages will be shown, for example if the province has only a religion or culture, but not both at the start date.
 	ENCODING = "windows-1252" # Change this to whatever the encoding of the mod is, most likely it is either "utf-8" or "windows-1252". If it is mixed and you want to be able to automatically convert the mod to an OpenVic mod, you currently would have to pick one and convert the files with the other encoding.
-	WATER_INDEX = {15,17} # Replace these numbers, if the mod changes the default EU4 index values for the ocean and inland ocean, which can be found in the map/terrain.txt by looking at the type = ocean/inland_ocean { color = { ?? } } at the end of the file or map/terrain.bmp for example by using GIMP and selecting an ocean/inland_ocean pixel with the color picker which will show the index.
+	TERRAIN_INDEX = {
+		"OCEAN_INDEX": 15, # Replace this number, if the mod changes the default EU4 index values for the ocean and inland ocean, which can be found in the map/terrain.txt by looking at the type = ocean/inland_ocean { color = { ?? } } at the end of the file or map/terrain.bmp for example by using GIMP and selecting an ocean/inland_ocean pixel with the color picker which will show the index.
+		"INLAND_OCEAN_INDEX": 17, # Same as with OCEAN_INDEX.
+		"CONTINENTAL_INDEX": 0, # This and COASTAL_INDEX will only be used to automatically create a new terrain.bmp, if you enable the option below. Specifically any pixel belonging to a continental province that is currently an ocean pixel will be changed to CONTINENTAL_INDEX.
+		"COASTAL_INDEX": 35 # Any coastal pixel that is not actually coastal will be replaced by STANDARD_CONTINENTAL.
+	}
 	LOCALISATION_FILES = [] # Add the localisation files with the province, area and country names in the brackets. For example for base EU4 it would look like: ["localisation/countries_l_english.yml","localisation/areas_regions_l_english.yml","localisation/prov_names_l_english.yml"] while for a mod these files or at least some of them are likely in the replace folder so the path would instead be "localisation/replace/???.yml"
 	DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output files, so you can choose to ignore them, though in some cases you really should check them.
-		"INDIVIDUAL_PIXELS":False, # Some provinces will be assigned to a continent, while some of their pixels in the terrain.bmp are for oceans/in the WATER_INDEX, while other provinces are assigned as ocean or lake in the default.map file, but have pixels that are continental/not in the WATER_INDEX. The province IDs with such wrong pixels will be shown regardless of whether this option is False or True, but setting this option to True will also show all individual wrong pixels, which can easily cause tens of thousands of lines mentioning wrong pixels.
+		"INDIVIDUAL_PIXELS":False, # Some provinces will be assigned to a continent, while some of their pixels in the terrain.bmp are for oceans/in the TERRAIN_INDEX, while other provinces are assigned as ocean or lake in the default.map file, but have pixels that are not according to the TERRAIN_INDEX. The province IDs with such wrong pixels will be shown regardless of whether this option is False or True, but setting this option to True will also show all individual wrong pixels, which can easily cause tens of thousands of lines mentioning wrong pixels.
 		"DATES_AFTER_START_DATE":True, # If you only care about mistakes that happen until the START_DATE, set this to False.
 		"MISSING_EMPTY_SPACE":True, # For example "add_core =" is searched as " add_core =" instead, as if it always had an empty space in front of it, which the formatting also inserts before and after "=", "{", "}" and the at the start and end of the text itself, as well as any time some parts get removed like date entries or put together like duplicate date entries. However there could be situations where EU4 does not actually require an empty space in front of it, for example 'capital = "?"add_core', which this script would not recognise as a core being added, so you should check all these warnings.
 		"IDENTICAL_DATES":True, # This mentions if one date appears multiple times in the same file, but their entries get combined anyway, so you can ignore this, if you don't want to combine the entries.
@@ -24,10 +29,12 @@ def mod_specific_values():
 		"REMOVE_NON_EXISTANT_CULTURE":True, # Sometimes cultures are removed as accepted cultures, even though they were not accepted at this date. So maybe some other culture was actually supposed to be removed.
 		"MISSING_PROVINCE_FILE":True, # Some provinces may be placed on a continent or such, but lack a province file, can be ignored as an empty "provinceID.txt" file will simply be generated anyway for the output.
 		"MISSING_PROVINCE_ID":True, # While it is not necessary to use all numbers between 1 and the number of provinces as IDs, maybe you still want to add empty files for such cases, if not you can set it to False.
-		"NAME_POSITION":False # The position of the name could be outside of the province, though this currently does not matter for conversion to a Victoria 2 mod.
+		"NAME_POSITION":False, # The position of the name could be outside of the province, though this currently does not matter for conversion to a Victoria 2 mod.
+		"INCORRECT_TERRAIN": False, # ONLY CHANGE THIS TO TRUE IF THERE ARE NO MORE ERRORS RELATED TO THE MAP! In EU4 it does not matter if the terrain.bmp matches the province being continental or an ocean, however in V2 this is important, so you can choose to automatically generate both the terrain.bmp and rivers.bmp to match this. The new ones will be saved as terrain2.bmp and rivers2.bmp and the generation process for the terrain.bmp is to copy any correct pixel, while incorrect ones will be swapped to ocean or inland_ocean for lakes or the CONTINENTAL_INDEX for continental provinces. If you do not see an error message containing: "If no map issues are mentioned above this message you can create the terrain.bmp and rivers.bmp files with correct pixels." leave this option as False as it either means there are important errors that need to be fixed first or very unlikely, everything is already correct.
+		"COAST_NOT_COASTAL": False # If you want every coastal province to have coastal terrain, change this to True. There will be no exceptions, so don't use this if a mod made some terrain not coastal by choice.
 	}
 	I_READ_THE_INSTRUCTIONS = False # Set this to True after changing all the settings you need to change or want to change and that's it. Now you can run it, if you have a sufficiently new Python version installed. Maybe anything after 3.7 will work, as well as a new enough Pillow version (Python Imaging Library).
-	return [START_DATE,ENCODING,WATER_INDEX,LOCALISATION_FILES,DONT_IGNORE_ISSUE,I_READ_THE_INSTRUCTIONS]
+	return [START_DATE,ENCODING,TERRAIN_INDEX,LOCALISATION_FILES,DONT_IGNORE_ISSUE,I_READ_THE_INSTRUCTIONS]
 
 # TODO check if ocean/lake files are empty, if bmps have correct indexes.
 # formats a text file when given the path.
@@ -622,7 +629,7 @@ def check_country_files(CULTURE_SET,RELIGION_SET,GOVERNMENT_SET,START_DATE,ENCOD
 	tag_set = set(tag_dictionary.keys())
 	return [tag_set,tag_dictionary]
 
-def check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,START_DATE,ENCODING,DATE_STRUCTURE,WATER_INDEX,LOCALISATION_FILES,DONT_IGNORE_ISSUE):
+def check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,START_DATE,ENCODING,DATE_STRUCTURE,TERRAIN_INDEX,LOCALISATION_FILES,DONT_IGNORE_ISSUE):
 	province_set = set()
 	for root, dirs, files in os.walk("history/provinces"):
 		for file in files:
@@ -649,7 +656,7 @@ def check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,START_DATE,ENCODING,DA
 			if province != counter:
 				print(f"No province file found for: {counter} until {province}")
 				counter = province
-	check_continents(province_set,ENCODING,WATER_INDEX,LOCALISATION_FILES,DONT_IGNORE_ISSUE)
+	check_continents(province_set,ENCODING,TERRAIN_INDEX,LOCALISATION_FILES,DONT_IGNORE_ISSUE)
 	return
 
 # Checks if dates contain obvious mistakes like cultures that don't exist in the culture files.
@@ -752,7 +759,7 @@ def check_date_entries(text,sorted_list,path,CULTURE_SET,RELIGION_SET,TAG_SET,DO
 				print(f"Invalid remove_core = {tag} found for {date} in {path}")
 	return
 
-def check_continents(province_set,ENCODING,WATER_INDEX,LOCALISATION_FILES,DONT_IGNORE_ISSUE):
+def check_continents(province_set,ENCODING,TERRAIN_INDEX,LOCALISATION_FILES,DONT_IGNORE_ISSUE):
 	text = format_text_in_path("map/continent.txt",ENCODING)
 	continent_list = []
 	while text.__contains__("= {"):
@@ -820,7 +827,7 @@ def check_continents(province_set,ENCODING,WATER_INDEX,LOCALISATION_FILES,DONT_I
 			for y in range(h):
 				if load_province_bmp[x,y] not in RGB_DICTIONARY:
 					print(f"The color at {x},{y} in the provinces.bmp is not in the map/definition.csv")
-	terrain = Image.open("map/terrain.bmp")
+	terrain = Image.open("map/terrain.bmp").copy()
 	terrain_w,terrain_h = terrain.size
 	if terrain_w != w or terrain_h != h:
 		print(f"The width and/or height of the provinces.bmp {w},{h} and terrain.bmp {terrain_w},{terrain_h} are not equal, which also means it wont be checked whether some terrain pixels are ocean or not while the province itself is continental or not.")
@@ -828,6 +835,7 @@ def check_continents(province_set,ENCODING,WATER_INDEX,LOCALISATION_FILES,DONT_I
 		load_terrain_image = terrain.load()
 		wrong_water_terrain = set()
 		wrong_land_terrain = set()
+		WATER_INDEX = {TERRAIN_INDEX["OCEAN_INDEX"],TERRAIN_INDEX["INLAND_OCEAN_INDEX"]}
 		if province_colors_are_in_definition_csv:
 			for x in range(w):
 				for y in range(h):
@@ -835,16 +843,53 @@ def check_continents(province_set,ENCODING,WATER_INDEX,LOCALISATION_FILES,DONT_I
 						if RGB_DICTIONARY[load_province_bmp[x,y]] not in water_provinces:
 							if DONT_IGNORE_ISSUE["INDIVIDUAL_PIXELS"]:
 								print(f"The color {load_province_bmp[x,y]} at {x},{y} is for a province on a continent, but the terrain is water.")
+							if DONT_IGNORE_ISSUE["INCORRECT_TERRAIN"]:
+								load_terrain_image[x,y] = TERRAIN_INDEX["CONTINENTAL_INDEX"]
 							wrong_water_terrain.add(RGB_DICTIONARY[load_province_bmp[x,y]])
 					else:
 						if RGB_DICTIONARY[load_province_bmp[x,y]] in water_provinces:
 							if DONT_IGNORE_ISSUE["INDIVIDUAL_PIXELS"]:
 								print(f"The color {load_province_bmp[x,y]} at {x},{y} is for a province in an ocean or lake, but the terrain is not.")
+							if DONT_IGNORE_ISSUE["INCORRECT_TERRAIN"]:
+								if RGB_DICTIONARY[load_province_bmp[x,y]] in ocean:
+									load_terrain_image[x,y] = TERRAIN_INDEX["OCEAN_INDEX"]
+								else:
+									load_terrain_image[x,y] = TERRAIN_INDEX["INLAND_OCEAN_INDEX"]
 							wrong_land_terrain.add(RGB_DICTIONARY[load_province_bmp[x,y]])
+			rivers = Image.open("map/rivers.bmp").copy()
+			rivers_w,rivers_h = rivers.size
+			if w != rivers_w or h != rivers_h:
+				print(f"The width and/or height of the provinces.bmp and the rivers.bmp are different.")
+			else:
+				if DONT_IGNORE_ISSUE["INCORRECT_TERRAIN"]:
+					load_rivers_bmp = rivers.load()
+					for x in range(w):
+						for y in range(h):
+							if load_rivers_bmp[x,y] > 253:
+								if load_terrain_image[x,y] in WATER_INDEX:
+									load_rivers_bmp[x,y] = 254
+								else:
+									load_rivers_bmp[x,y] = 255
+					rivers.save("map/rivers2.bmp")
+				if DONT_IGNORE_ISSUE["COAST_NOT_COASTAL"]:
+					for x in range(w):
+						for y in range(h):
+							if load_terrain_image[x,y] not in WATER_INDEX:
+								is_coastal = False
+								for a in [-1,0,1]:
+									for b in [-1,0,1]:
+										if 0 <= x + a < w and 0 <= y + b < h:
+											if load_terrain_image[x+a,y+b] in WATER_INDEX:
+												is_coastal = True
+								if is_coastal:
+									load_terrain_image[x,y] = TERRAIN_INDEX["COASTAL_INDEX"]
+								elif load_terrain_image[x,y] == TERRAIN_INDEX["COASTAL_INDEX"]:
+									load_terrain_image[x,y] = TERRAIN_INDEX["CONTINENTAL_INDEX"]
+				terrain.save("map/terrain2.bmp")
 			if wrong_water_terrain:
-				print(f"Some terrain.bmp pixels are water, but their provinces are not ocean or lakes: {wrong_water_terrain}")
+				print(f"If no map issues are mentioned above this message you can create the terrain.bmp and rivers.bmp files with correct pixels. Some terrain.bmp pixels are water, but their provinces are not ocean or lakes: {wrong_water_terrain}")
 			if wrong_land_terrain:
-				print(f"Some terrain.bmp pixels are not water, but their provinces are ocean or lakes: {wrong_land_terrain}")
+				print(f"If no map issues are mentioned above this message you can create the terrain.bmp and rivers.bmp files with correct pixels. Some terrain.bmp pixels are not water, but their provinces are ocean or lakes: {wrong_land_terrain}")
 		else:
 			print("Whether some Terrain pixels are water or not, while the province it belongs to is the other could not be checked due to colors in the provinces.bmp that are not in the definition.csv")
 	text = format_text_in_path("map/climate.txt",ENCODING)
@@ -1184,7 +1229,7 @@ def check_rivers():
 					if counter == 1:
 						pass
 					elif counter > 1:
-						if started_from_index != 0:
+						if started_from_index != 0 and (abs(river_source[0]-a) + abs(river_source[1]-b)) <= 1:
 							print(f"{a},{b} a river should only have a single source/green pixel attached to it, all the rivers merging into it should not have one, but one of the rivers here seems to have this problem.")
 							if (abs(river_source[0]-a) + abs(river_source[1]-b)) == 1:
 								load_bmp[a,b] = 3 # Going in from a tributary or distributary river would cut a river in half, so it has to be reconnected again.
@@ -1214,7 +1259,7 @@ def check_rivers():
 	for x in range(w):
 		for y in range(h):
 			if load_bmp[x,y] < 254:
-				print(f"{x},{y} this river pixel should either lack a source or is not properly connected with the main river.")
+				print(f"{x},{y} is part of a river that either lacks a source or is not properly connected with the main river, the pixel could be very far away from the actually intended source and the river itself will not be properly checked either due to the possibility of generating a lot of false positive issues, so you need to run the script again after fixing it.")
 				check_for_more = True
 				current_river_pixel = (x,y)
 				tributary_rivers = []
@@ -1239,7 +1284,7 @@ def check_rivers():
 						check_for_more = False
 	return
 
-[START_DATE,ENCODING,WATER_INDEX,LOCALISATION_FILES,DONT_IGNORE_ISSUE,I_READ_THE_INSTRUCTIONS] = mod_specific_values()
+[START_DATE,ENCODING,TERRAIN_INDEX,LOCALISATION_FILES,DONT_IGNORE_ISSUE,I_READ_THE_INSTRUCTIONS] = mod_specific_values()
 if not  I_READ_THE_INSTRUCTIONS:
 	print("READ AND FOLLOW THE INSTRUCTIONS AT THE START OF THE FILE! For some mods you still have to make minimal changes yourself.")
 else:
@@ -1250,7 +1295,7 @@ else:
 	if CULTURE_SET and RELIGION_SET and GOVERNMENT_SET:
 		DATE_STRUCTURE = re.compile(r'[^-0-9]{1}[-]{0,1}[0-9]{1,5}["."][0-9]{1,2}["."][0-9]{1,2} = {')
 		[TAG_SET,TAG_DICTIONARY] = check_country_files(CULTURE_SET,RELIGION_SET,GOVERNMENT_SET,START_DATE,ENCODING,DATE_STRUCTURE,DONT_IGNORE_ISSUE)
-		check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,START_DATE,ENCODING,DATE_STRUCTURE,WATER_INDEX,LOCALISATION_FILES,DONT_IGNORE_ISSUE)
+		check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,START_DATE,ENCODING,DATE_STRUCTURE,TERRAIN_INDEX,LOCALISATION_FILES,DONT_IGNORE_ISSUE)
 		check_rivers()
 	else:
 		if not CULTURE_SET:
