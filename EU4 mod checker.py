@@ -3,9 +3,11 @@
 from PIL import Image
 import re
 import os
-# This mod_specific_values function is the only parts of the script you might need to change, just follow the instructions.
+# These GLOBAL values are the only parts of the script you might need to change, just follow the instructions.
+GLOBAL_LANGUAGES = ["english"] # Add or remove whatever language, where you want to check the Victoria 2/OpenVic related localisation. You can also leave the brackets empty [] if you want to search for specific files instead, to ensure that the localisation is only present in those.
+GLOBAL_LOCALISATION_FILES = [] # Add the localisation files with the province, area and country names in the brackets, if you want to know whether all are actually there, rather than somewhere else in the localisation folder. For example for base EU4 it would look like: ["localisation/countries_l_english.yml","localisation/areas_regions_l_english.yml","localisation/prov_names_l_english.yml"] while for a mod these files or at least some of them are likely named different and in the replace folder, so the path would instead be "localisation/replace/???.yml"
 def mod_specific_values():
-	START_DATE = "1444.11.11" # Replace 1444.11.11 with the intended start date in the form years.months.days, unless it would either be a 29th February as those do neither exist in OpenVic nor Victoria 2 and will be replaced with 28th February and for OpenVic it must be a date within the range -32768.1.1 to 32767.12.31 or if the output is intended for Victoria 2, i assume dates must be after 1.1.1 or even later, but i am not sure about the exact details. Any input that is not valid will be replaced with 1444.11.11. The history will be applied until the start date, including identical dates like 01444.11.11 and error messages will be shown, for example if the province has only a religion or culture, but not both at the start date.
+	START_DATE = "1444.11.11" # Replace 1444.11.11 with the intended start date in the form years.months.days, unless it would either be a 29th February as those do neither exist in OpenVic nor Victoria 2 and will be replaced with 28th February and for OpenVic it must be a date within the range 1.1.1 to 65535.12.31 or if the output is intended for Victoria 2, i assume dates must be after 1.1.1 or even later, but i am not sure about the exact details. Any input that is not valid will be replaced with 1444.11.11. The history will be applied until the start date, including identical dates like 01444.11.11 and error messages will be shown, for example if the province has only a religion or culture, but not both at the start date.
 	ENCODING = "windows-1252" # Change this to whatever the encoding of the mod is, most likely it is either "utf-8" or "windows-1252". If it is mixed and you want to be able to automatically convert the mod to an OpenVic mod, you currently would have to pick one and convert the files with the other encoding.
 	TERRAIN_DICTIONARY = {
 		"OCEAN_INDEX": 15, # Replace this number, if the mod changes the default EU4 index values for the ocean and inland ocean, which can be found in the map/terrain.txt by looking at the type = ocean/inland_ocean { color = { ?? } } at the end of the file or map/terrain.bmp for example by using GIMP and selecting an ocean/inland_ocean pixel with the color picker which will show the index.
@@ -14,7 +16,6 @@ def mod_specific_values():
 		"COASTAL_INDEX": 35, # Any coastal pixel that is not actually coastal will be replaced by STANDARD_CONTINENTAL.
 		"FORCE_INLAND_OCEAN": ["inland_ocean"] # You can simply make the brackets empty [] if you don't want the following to happen: Any province in the terrain_override part for the terrains in this list will be turned into inland ocean terrain in the terrain.bmp and rivers.bmp, just like any current inland ocean province not in this list will have it's terrain turned into regular ocean terrain, if you set "INCORRECT_TERRAIN" = True. For example Elder Scrolls Universalis has impassable river provinces, which use "impassable_mountains" terrain as identifier, as i currently intend to turn these rivers into impassable ocean provinces in Victoria 2/OpenVic.
 	}
-	LOCALISATION_FILES = [] # Add the localisation files with the province, area and country names in the brackets. For example for base EU4 it would look like: ["localisation/countries_l_english.yml","localisation/areas_regions_l_english.yml","localisation/prov_names_l_english.yml"] while for a mod these files or at least some of them are likely in the replace folder so the path would instead be "localisation/replace/???.yml"
 	DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output files, so you can choose to ignore them, though in some cases you really should check them.
 		"INDIVIDUAL_PIXELS":False, # Some provinces will be assigned to a continent, while some of their pixels in the terrain.bmp are for oceans/in the TERRAIN_DICTIONARY, while other provinces are assigned as ocean or lake in the default.map file, but have pixels that are not according to the TERRAIN_DICTIONARY. The province IDs with such wrong pixels will be shown regardless of whether this option is False or True, but setting this option to True will also show all individual wrong pixels, which can easily cause tens of thousands of lines mentioning wrong pixels.
 		"DATES_AFTER_START_DATE":True, # If you only care about mistakes that happen until the START_DATE, set this to False.
@@ -30,13 +31,15 @@ def mod_specific_values():
 		"REMOVE_NON_EXISTANT_CULTURE":True, # Sometimes cultures are removed as accepted cultures, even though they were not accepted at this date. So maybe some other culture was actually supposed to be removed.
 		"MISSING_PROVINCE_FILE":True, # Some provinces may be placed on a continent or such, but lack a province file, can be ignored as an empty "provinceID.txt" file will simply be generated anyway for the output.
 		"MISSING_PROVINCE_ID":True, # While it is not necessary to use all numbers between 1 and the number of provinces as IDs, maybe you still want to add empty files for such cases, if not you can set it to False.
+		"CITY_POSITION":False, # The position of the city could be outside of the province, though this currently does not matter for conversion to a Victoria 2 mod.
+		"UNIT_POSITION":False, # The position of units could be outside of the province, though this currently does not matter for conversion to a Victoria 2 mod.
 		"NAME_POSITION":False, # The position of the name could be outside of the province, though this currently does not matter for conversion to a Victoria 2 mod.
 		"NO_TERRAIN_OVERRIDE": False, # If set to True you get a list of all continental provinces that are not used in any terrain_override, which is not necessary, just something you may want to do.
 		"INCORRECT_TERRAIN": False, # ONLY CHANGE THIS TO TRUE IF THERE ARE NO MORE ERRORS RELATED TO THE MAP! In EU4 it does not matter if the terrain.bmp matches the province being continental or an ocean, however in V2 this is important, so you can choose to automatically generate both the terrain.bmp and rivers.bmp to match this. The new ones will be saved as terrain2.bmp and rivers2.bmp and the generation process for the terrain.bmp is to copy any correct pixel, while incorrect ones will be swapped to ocean or inland_ocean for lakes or the CONTINENTAL_INDEX for continental provinces. If you do not see an error message containing: "If no map issues are mentioned above this message you can create the terrain.bmp and rivers.bmp files with correct pixels." leave this option as False as it either means there are important errors that need to be fixed first or very unlikely, everything is already correct.
 		"COAST_NOT_COASTAL": False # If you want every coastal province to have coastal terrain, change this to True. There will be no exceptions, so don't use this if a mod made some terrain not coastal by choice.
 	}
 	I_READ_THE_INSTRUCTIONS = False # Set this to True after changing all the settings you need to change or want to change and that's it. Now you can run it, if you have a sufficiently new Python version installed. Maybe anything after 3.7 will work, as well as a new enough Pillow version (Python Imaging Library).
-	return [START_DATE,ENCODING,TERRAIN_DICTIONARY,LOCALISATION_FILES,DONT_IGNORE_ISSUE,I_READ_THE_INSTRUCTIONS]
+	return [START_DATE,ENCODING,TERRAIN_DICTIONARY,DONT_IGNORE_ISSUE,I_READ_THE_INSTRUCTIONS]
 
 # TODO check if ocean/lake files are empty, if bmps have correct indexes.
 # formats a text file when given the path.
@@ -70,8 +73,8 @@ def verify_date(date):
 	years = int(years)
 	months = int(months)
 	days = int(days)
-	if years < -32768 or years > 32767:
-		print(f"{date} is not a valid date as OpenVic does not support years beyond -32768 to 32767 or -2^15 to 2^15 - 1. Sucks for Warhammer 40k fans.")
+	if years < 1 or years > 65535:
+		print(f"{date} is not a valid date as OpenVic does not support years beyond 1 to 65535 or 1 to 2^16 - 1.")
 		return "1444.11.11"
 	if months < 1 or months > 12 or days < 1 or days > 31:
 		print(f"{date} is not a valid date")
@@ -106,7 +109,7 @@ def remove_text_between_brackets(text,sub_string,path):
 			print(f"In {path} the brackets are wrong.")
 			return "#"
 		text = prior_text + leftover
-	text = " " + " ".join(text.split()) + " "
+	text = " " + text.strip() + " "
 	return text
 
 # creates a set of all cultures and a dictionary {culture_group:{culture:{male_names:" ",female_names:" ",dynasty_names:" "}}}
@@ -351,7 +354,7 @@ def get_governments(ENCODING):
 					print(f'common/governments/{file} ended up starting with " = {{" while being evaluated: {text[:99]}')
 					return set()
 				next_government = text.split(" = {",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1]
-				text = remove_text_between_brackets(text,next_government + " = {","common/governments/" + file)
+				text = remove_text_between_brackets(text," " + next_government + " = {","common/governments/" + file)
 				if next_government != "pre_dharma_mapping":
 					government_set.add(next_government)
 			if text != "  ":
@@ -438,8 +441,8 @@ def get_sorted_dates(text,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_ISSUE):
 							print(f"There was a date within the date {date} in {path}")
 							return "#"
 						break
-		if int(years) < -32768 or int(years) > 32767:
-			print(f"{date} is not a valid date as OpenVic does not support years beyond -32768 to 32767 or -2^15 to 2^15 - 1. Sucks for Warhammer 40k fans in: {path}")
+		if int(years) < 1 or int(years) > 65535:
+			print(f"{date} is not a valid date as OpenVic does not support years beyond 1 to 65535 or 1 to 2^16 - 1: {path}")
 			continue
 		if int(months) < 1 or int(months) > 12 or int(days) < 1 or int(days) > 31:
 			print(f"{date} is not a valid date in: {path}")
@@ -450,9 +453,12 @@ def get_sorted_dates(text,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_ISSUE):
 				continue
 		if int(months) == 2:
 			if int(days) == 29:
-				print(f"29th February is not a valid date in OpenVic, so {date} will be changed to {int(years)}.{int(months)}.28 instead in the output files. Found in: {path}")
+				if str(int(years)) + "." + str(int(months)) + ".28" == START_DATE:
+					print(f"29th February is not a valid date in OpenVic, so if {date} is identical to the START_DATE you entered, which was changed to {START_DATE} instead, the date entry will not be applied. Found in: {path}")
+				else:
+					print(f"29th February is not a valid date in OpenVic, though {date} will still be applied. Found in: {path}")
 			elif int(days) == 30 or int(days) == 31:
-				print(f'{days}th February? Really? This "date" will be ignored. Found in: {path}')
+				print(f'{days}th February? Really? This "date" will be ignored, however this means whatever is within it will be applied with the other province entries not within a date. Found in: {path}')
 				continue
 		if date not in date_list:
 			date_list.append(date)
@@ -631,25 +637,29 @@ def check_country_files(CULTURE_SET,RELIGION_SET,GOVERNMENT_SET,START_DATE,ENCOD
 	tag_set = set(tag_dictionary.keys())
 	return [tag_set,tag_dictionary]
 
-def check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,START_DATE,ENCODING,DATE_STRUCTURE,TERRAIN_DICTIONARY,LOCALISATION_FILES,DONT_IGNORE_ISSUE):
+def check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,START_DATE,ENCODING,DATE_STRUCTURE,TERRAIN_DICTIONARY,DONT_IGNORE_ISSUE):
 	province_set = set()
+	empty_province_files_set = set()
 	for root, dirs, files in os.walk("history/provinces"):
 		for file in files:
 			if not re.fullmatch("[1-9]",file[0]):
 				print(f"Province file name does not start with a number from 1 to 9 in history/provinces/{file}")
 				continue
 			path = os.path.join(root, file)
-			text = format_text_in_path(path,ENCODING)
-			sorted_list = get_sorted_dates(text,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_ISSUE)
-			check_date_entries(text,sorted_list,path,CULTURE_SET,RELIGION_SET,TAG_SET,DONT_IGNORE_ISSUE)
 			province_ID = ""
-			while re.fullmatch("[0-9]",file[0]): 
+			while re.fullmatch("[0-9]",file[0]):
 				province_ID += file[0]
 				file = file[1:]
 			if int(province_ID) not in province_set:
 				province_set.add(int(province_ID))
 			else:
 				print(f'At least 2 files have the same province ID "{province_ID}" in history/provinces.')
+			text = format_text_in_path(path,ENCODING)
+			if text == "  ":
+				empty_province_files_set.add(int(province_ID))
+				continue
+			sorted_list = get_sorted_dates(text,START_DATE,DATE_STRUCTURE,path,DONT_IGNORE_ISSUE)
+			check_date_entries(text,sorted_list,path,CULTURE_SET,RELIGION_SET,TAG_SET,DONT_IGNORE_ISSUE)
 	province_tuple = tuple(sorted(province_set, key=int))
 	counter = 0
 	if DONT_IGNORE_ISSUE["MISSING_PROVINCE_ID"]:
@@ -658,7 +668,7 @@ def check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,START_DATE,ENCODING,DA
 			if province != counter:
 				print(f"No province file found for: {counter} until {province}")
 				counter = province
-	check_continents(TAG_SET,province_set,ENCODING,TERRAIN_DICTIONARY,LOCALISATION_FILES,DONT_IGNORE_ISSUE)
+	check_continents(TAG_SET,province_set,empty_province_files_set,ENCODING,TERRAIN_DICTIONARY,DONT_IGNORE_ISSUE)
 	return
 
 # Checks if dates contain obvious mistakes like cultures that don't exist in the culture files.
@@ -761,7 +771,7 @@ def check_date_entries(text,sorted_list,path,CULTURE_SET,RELIGION_SET,TAG_SET,DO
 				print(f"Invalid remove_core = {tag} found for {date} in {path}")
 	return
 
-def check_continents(TAG_SET,province_set,ENCODING,TERRAIN_DICTIONARY,LOCALISATION_FILES,DONT_IGNORE_ISSUE):
+def check_continents(TAG_SET,province_set,empty_province_files_set,ENCODING,TERRAIN_DICTIONARY,DONT_IGNORE_ISSUE):
 	text = format_text_in_path("map/continent.txt",ENCODING)
 	continent_list = []
 	while text.__contains__("= {"):
@@ -809,10 +819,10 @@ def check_continents(TAG_SET,province_set,ENCODING,TERRAIN_DICTIONARY,LOCALISATI
 	inland_ocean = lakes.copy()
 	for terrain in TERRAIN_DICTIONARY["FORCE_INLAND_OCEAN"]:
 		inland_ocean = inland_ocean.union(PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"])
-		for prov in PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"]:
-			water_provinces.add(prov)
-			if prov in combined_continent_set:
-				combined_continent_set.remove(prov)
+		water_provinces = water_provinces.union(PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"])
+		combined_continent_set = combined_continent_set.difference(PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"])
+	if water_provinces - empty_province_files_set:
+		print(f"These water provinces have some entries in their files: {water_provinces - empty_province_files_set}")
 	image = Image.open("map/provinces.bmp")
 	w,h = image.size
 	load_province_bmp = image.load()
@@ -930,10 +940,12 @@ def check_continents(TAG_SET,province_set,ENCODING,TERRAIN_DICTIONARY,LOCALISATI
 		leftover_provinces = combined_continent_set - TERRAIN_OVERRIDE_PROVINCES - ocean - lakes - impassable
 		if leftover_provinces:
 			print(f"The following provinces are continental and don't use terrain_override: {leftover_provinces}")
+	if impassable - empty_province_files_set:
+		print(f"The following impassable provinces do not have empty province files: {impassable - empty_province_files_set}")
 	AREA_SET = check_area(combined_continent_set,lakes,impassable,ENCODING)
 	check_positions(ocean,lakes,impassable,pixel_set,DEFINITIONS_DICTIONARY,ENCODING,DONT_IGNORE_ISSUE)
 	province_set = combined_continent_set.union(province_set,water_provinces)
-	check_localisation(TAG_SET,province_set,AREA_SET,LOCALISATION_FILES)
+	check_localisation(TAG_SET,province_set,AREA_SET)
 	return
 
 
@@ -949,12 +961,12 @@ def check_terrain():
 			if counter == 0:
 				terrain = terrain[:index - 1]
 				break
-	if terrain.__contains__("pti = { type = pti }"):
-		terrain = " ".join(terrain.split("pti = { type = pti }",maxsplit=1))
+	if terrain.__contains__(" pti = { type = pti } "):
+		terrain = " ".join(terrain.split(" pti = { type = pti } ",maxsplit=1))
 		if terrain.__contains__("pti = { type = pti }"):
 			print('The "pti = {{ type = pti }}" part was found at least twice in map/terrain.txt.')
 	else:
-		print(f'The "pti = {{ type = pti }}" part was not found in map/terrain.txt.')
+		print(f'The " pti = {{ type = pti }} " part was not found in map/terrain.txt.')
 	terrain_list = terrain.split(" = {")
 	province_terrain_dictionary = dict()
 	terrain_override_provinces = set()
@@ -965,11 +977,11 @@ def check_terrain():
 		while terrain_list[0].rsplit(" ",maxsplit=1)[1] in {"color","terrain_override"}:
 			if terrain_list[0].rsplit(" ",maxsplit=1)[1] == "color":
 				if "color" in province_terrain_dictionary[current_terrain]:
-					print(f"There are at least 2 colors for the terrain {current_terrain}.")
+					print(f"The terrain {current_terrain} has at least 2 colors.")
 				province_terrain_dictionary[current_terrain]["color"] = terrain_list[1].split("}",maxsplit=1)[0]
 			else:
 				if "terrain_override" in province_terrain_dictionary[current_terrain]:
-					print(f"There are at least 2 terrain_override parts for the terrain {current_terrain}.")
+					print(f"The terrain {current_terrain} has at least 2 terrain_override parts.")
 				additional_override = set(map(int,terrain_list[1].split("}",maxsplit=1)[0].split()))
 				province_terrain_dictionary[current_terrain]["terrain_override"] = additional_override
 				for prov in additional_override:
@@ -977,6 +989,10 @@ def check_terrain():
 						print(f"The province {prov} in the terrain override of {current_terrain} is already used in another terrain override.")
 				terrain_override_provinces = terrain_override_provinces.union(additional_override)
 			terrain_list.remove(terrain_list[0])
+		if "color" not in province_terrain_dictionary[current_terrain]:
+			print(f"The terrain {current_terrain} has no color.")
+		if "terrain_override" not in province_terrain_dictionary[current_terrain]:
+			print(f"The terrain {current_terrain} has no terrain_override part.")
 	return province_terrain_dictionary,terrain_override_provinces
 
 def check_area(combined_continent_set,lakes,impassable,ENCODING):
@@ -1202,10 +1218,10 @@ def check_positions(OCEAN_SET,LAKES_SET,IMPASSABLE_SET,pixel_set,DEFINITIONS_DIC
 		if provinceID not in DEFINITIONS_DICTIONARY:
 			print(f"The province ID {provinceID} is not found in the map/definition.csv file, but a position for it exists.")
 			continue
-		if city_x != -1 and city_y != -1:
+		if DONT_IGNORE_ISSUE["CITY_POSITION"] and city_x != -1 and city_y != -1:
 			if image_load_original[int(float(city_x)),int(h-1 - float(city_y))] != DEFINITIONS_DICTIONARY[provinceID]:
 				print(f"The rounded position {int(float(city_x))},{int(float(city_y))} of the city model, which is {int(float(city_x))},{int(h-1 - float(city_y))} when opening the bmp with GIMP, for province {provinceID} is not within the province itself.")
-		if unit_x != -1 and unit_y != -1:
+		if DONT_IGNORE_ISSUE["UNIT_POSITION"] and unit_x != -1 and unit_y != -1:
 			if image_load_original[int(float(unit_x)),int(h-1 - float(unit_y))] != DEFINITIONS_DICTIONARY[provinceID]:
 				print(f"The rounded position {int(float(unit_x))},{int(float(unit_y))} of the unit model, which is {int(float(unit_x))},{int(h-1 - float(unit_y))} when opening the bmp with GIMP, for province {provinceID} is not within the province itself.")
 		if DONT_IGNORE_ISSUE["NAME_POSITION"] and name_x != -1 and name_y != -1:
@@ -1216,18 +1232,29 @@ def check_positions(OCEAN_SET,LAKES_SET,IMPASSABLE_SET,pixel_set,DEFINITIONS_DIC
 		port_x = int(float(port_x))
 		port_y = int(h-1 - float(port_y))
 		coastal_nearby = False
-		for x in range(-2,2):
-			for y in range(-2,2):
-				if image_load_original[max(0,min(w-1,port_x+x)),max(0,min(h-1,port_y+y))] == DEFINITIONS_DICTIONARY[provinceID]:
+		ocean_nearby = False
+		for x in range(-2,3):
+			for y in range(-2,3):
+				if image_load[max(0,min(w-1,port_x+x)),max(0,min(h-1,port_y+y))] == DEFINITIONS_DICTIONARY[provinceID]:
 					coastal_nearby = True
+				if image_load[max(0,min(w-1,port_x+x)),max(0,min(h-1,port_y+y))] == ocean:
+					ocean_nearby = True
+				if coastal_nearby and ocean_nearby:
 					break
-			if coastal_nearby:
+			if coastal_nearby and ocean_nearby:
 				break
-		if not coastal_nearby:
-			print(f"There is no coastal province within a 2 pixel radius of the rounded port position {port_x},{h-port_y} for province {provinceID}, which would be {port_x},{port_y} in GIMP")
+		if not coastal_nearby and ocean_nearby:
+			print(f"There is no coastal province pixel within a 2 pixel radius of the rounded port position {port_x},{h-1-port_y} for province {provinceID}, which would be {port_x},{port_y} in GIMP")
+		if coastal_nearby and not ocean_nearby:
+			print(f"There is no ocean province pixel within a 2 pixel radius of the rounded port position {port_x},{h-1-port_y} for province {provinceID}, which would be {port_x},{port_y} in GIMP")
+		if not coastal_nearby and not ocean_nearby:
+			print(f"There is neither a coastal nor an ocean province pixel within a 2 pixel radius of the rounded port position {port_x},{h-1-port_y} for province {provinceID}, which would be {port_x},{port_y} in GIMP")
+		if coastal_nearby and ocean_nearby:
+			if image_load[port_x,port_y] not in {DEFINITIONS_DICTIONARY[provinceID],ocean}:
+				print(f"The rounded port position {port_x},{h-1-port_y} for province {provinceID}, which would be {port_x},{port_y} in GIMP is neither a coastal nor an ocean pixel.")
 	return
 
-def check_localisation(TAG_SET,PROVINCE_SET,AREA_SET,LOCALISATION_FILES):
+def check_localisation(TAG_SET,PROVINCE_SET,AREA_SET):
 	localisation_dictionary = dict()
 	for a in TAG_SET:
 		if a not in {"REB","NAT","PIR"}:
@@ -1242,8 +1269,33 @@ def check_localisation(TAG_SET,PROVINCE_SET,AREA_SET,LOCALISATION_FILES):
 			print(f"Both an area and a province are called {a}.")
 		else:
 			localisation_dictionary["PROV" + str(a)] = 0
-	if LOCALISATION_FILES:
-		for files in LOCALISATION_FILES:
+	for language in GLOBAL_LANGUAGES:
+		l_language_yml = "_l_" + language + ".yml"
+		language_dictionary = localisation_dictionary.copy()
+		for root, dirs, files in os.walk("localisation"):
+			for file in files:
+				if file.__contains__(l_language_yml):
+					with open(os.path.join(root, file),'r',encoding="utf-8-sig",errors='replace') as loc:
+						for line in loc:
+							if line.__contains__("�"):
+								print(f"A character with wrong encoding was found in line {line} in file {os.path.join(root, file)}")
+							if line.__contains__(':'):
+								[key,value] = line.split(':',maxsplit=1)
+								if not value.__contains__('"'):
+									continue
+								if value.count('"') < 2:
+									print(f'There is only one " behind the : in the line {line} in file {os.path.join(root, file)}')
+									continue
+								if key.strip() in language_dictionary and key.strip() != "":
+									language_dictionary[key.strip()] += 1
+		for key in language_dictionary:
+			if language_dictionary[key] != 1:
+				if language_dictionary[key] == 0:
+					print(f"The language {language} has no localisation for {key} in the entered files")
+				else:
+					print(f"The language {language} has {language_dictionary[key]} localisations for {key} in the entered files")
+	if GLOBAL_LOCALISATION_FILES:
+		for files in GLOBAL_LOCALISATION_FILES:
 			with open(files,'r',encoding="utf-8-sig",errors='replace') as file:
 				for line in file:
 					line = line.split('#',maxsplit=1)[0]
@@ -1261,7 +1313,7 @@ def check_localisation(TAG_SET,PROVINCE_SET,AREA_SET,LOCALISATION_FILES):
 		for key in localisation_dictionary:
 			if localisation_dictionary[key] != 1:
 				print(f"There are either no or multiple localisations for {key} in the entered files")
-	else:
+	elif not GLOBAL_LANGUAGES:
 		print(f"No localisation files were entered, so no checks were made.")
 	return
 
@@ -1359,7 +1411,7 @@ def check_rivers():
 						check_for_more = False
 	return
 
-[START_DATE,ENCODING,TERRAIN_DICTIONARY,LOCALISATION_FILES,DONT_IGNORE_ISSUE,I_READ_THE_INSTRUCTIONS] = mod_specific_values()
+[START_DATE,ENCODING,TERRAIN_DICTIONARY,DONT_IGNORE_ISSUE,I_READ_THE_INSTRUCTIONS] = mod_specific_values()
 if not  I_READ_THE_INSTRUCTIONS:
 	print("READ AND FOLLOW THE INSTRUCTIONS AT THE START OF THE FILE! For some mods you still have to make minimal changes yourself.")
 else:
@@ -1370,7 +1422,7 @@ else:
 	if CULTURE_SET and RELIGION_SET and GOVERNMENT_SET:
 		DATE_STRUCTURE = re.compile(r'[^-0-9]{1}[-]{0,1}[0-9]{1,5}["."][0-9]{1,2}["."][0-9]{1,2} = {')
 		[TAG_SET,TAG_DICTIONARY] = check_country_files(CULTURE_SET,RELIGION_SET,GOVERNMENT_SET,START_DATE,ENCODING,DATE_STRUCTURE,DONT_IGNORE_ISSUE)
-		check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,START_DATE,ENCODING,DATE_STRUCTURE,TERRAIN_DICTIONARY,LOCALISATION_FILES,DONT_IGNORE_ISSUE)
+		check_province_files(CULTURE_SET,RELIGION_SET,TAG_SET,START_DATE,ENCODING,DATE_STRUCTURE,TERRAIN_DICTIONARY,DONT_IGNORE_ISSUE)
 		check_rivers()
 	else:
 		if not CULTURE_SET:
