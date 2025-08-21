@@ -1242,31 +1242,42 @@ def check_positions(OCEAN_SET,LAKES_SET,IMPASSABLE_SET,pixel_set,DEFINITIONS_DIC
 			if coastal_nearby and ocean_nearby:
 				break
 		if not coastal_nearby and ocean_nearby:
-			print(f"There is no coastal province pixel within a 2 pixel radius of the rounded port position {port_x},{h-1-port_y} for province {provinceID}, which would be {port_x},{port_y} in GIMP")
+			print(f"There is no coastal province pixel within a 2 pixel radius of the rounded port position {port_x},{h-1-port_y} for province {provinceID}, which would be {port_x},{port_y} in GIMP, if the province is not supposed to have a port, some stray pixel is somewhere next to an ocean.")
 		if coastal_nearby and not ocean_nearby:
-			print(f"There is no ocean province pixel within a 2 pixel radius of the rounded port position {port_x},{h-1-port_y} for province {provinceID}, which would be {port_x},{port_y} in GIMP")
+			print(f"There is no ocean province pixel within a 2 pixel radius of the rounded port position {port_x},{h-1-port_y} for province {provinceID}, which would be {port_x},{port_y} in GIMP, if the province is not supposed to have a port, some stray pixel is somewhere next to an ocean.")
 		if not coastal_nearby and not ocean_nearby:
-			print(f"There is neither a coastal nor an ocean province pixel within a 2 pixel radius of the rounded port position {port_x},{h-1-port_y} for province {provinceID}, which would be {port_x},{port_y} in GIMP")
+			print(f"There is neither a coastal nor an ocean province pixel within a 2 pixel radius of the rounded port position {port_x},{h-1-port_y} for province {provinceID}, which would be {port_x},{port_y} in GIMP, if the province is not supposed to have a port, some stray pixel is somewhere next to an ocean.")
 		if coastal_nearby and ocean_nearby:
 			if image_load[port_x,port_y] not in {DEFINITIONS_DICTIONARY[provinceID],ocean}:
-				print(f"The rounded port position {port_x},{h-1-port_y} for province {provinceID}, which would be {port_x},{port_y} in GIMP is neither a coastal nor an ocean pixel.")
+				print(f"The rounded port position {port_x},{h-1-port_y} for province {provinceID}, which would be {port_x},{port_y} in GIMP is neither a coastal nor an ocean pixel, if the province is not supposed to have a port, some stray pixel is somewhere next to an ocean.")
 	return
 
 def check_localisation(PROVINCE_SET,AREA_SET):
 	localisation_dictionary = dict()
-	for a in TAG_SET:
-		if a not in {"REB","NAT","PIR"}:
-			localisation_dictionary[a] = 0
-			localisation_dictionary[a + "_ADJ"] = 0
-	for a in AREA_SET:
-		if a in TAG_SET or a + "_ADJ" in TAG_SET:
-			print(f"Both an area and a tag or tag adjective are called {a} or {a + "_ADJ"}.")
-		localisation_dictionary[a] = 0
-	for a in PROVINCE_SET:
-		if "PROV" + str(a) in localisation_dictionary:
-			print(f"Both an area and a province are called {a}.")
+	for tag in TAG_SET:
+		if tag not in {"REB","NAT","PIR"}:
+			localisation_dictionary[tag] = 0
+			localisation_dictionary[tag + "_ADJ"] = 0
+	for area in AREA_SET:
+		if area in localisation_dictionary:
+			print(f"Both an area and a tag or tag adjective are called {area}.")
 		else:
-			localisation_dictionary["PROV" + str(a)] = 0
+			localisation_dictionary[area] = 0
+	for province in PROVINCE_SET:
+		if "PROV" + str(province) in localisation_dictionary:
+			print(f"Both an area and a province are called {province}.")
+		else:
+			localisation_dictionary["PROV" + str(province)] = 0
+	for culture in CULTURE_SET:
+		if culture in localisation_dictionary:
+			print(f"The culture {culture} is already used for other localisation, likely an area, less likely a TAG, TAG_ADJ or PROV?.")
+		else:
+			localisation_dictionary[culture] = 0
+	for religion in RELIGION_SET:
+		if religion in localisation_dictionary:
+			print(f"The religion {religion} is already used for other localisation, likely a culture or area, less likely a TAG, TAG_ADJ or PROV?.")
+		else:
+			localisation_dictionary[religion] = 0
 	for language in LANGUAGES:
 		l_language_yml = "_l_" + language + ".yml"
 		language_dictionary = localisation_dictionary.copy()
