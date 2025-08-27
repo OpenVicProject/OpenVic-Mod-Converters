@@ -824,10 +824,7 @@ def check_continents(province_set,empty_province_files_set):
 	image = Image.open("map/provinces.bmp")
 	w,h = image.size
 	load_province_bmp = image.load()
-	pixel_set = set()
-	for x in range(w):
-		for y in range(h):
-			pixel_set.add(load_province_bmp[x,y])
+	pixel_set = set(color for count, color in image.getcolors(65536)) # TODO eventually increase the max color value.
 	if text.count(" max_provinces = ") != 1:
 		print('Either " max_provinces = " does not exist in the map/default.map file or it appears multiple times.')
 	else:
@@ -836,6 +833,8 @@ def check_continents(province_set,empty_province_files_set):
 			print(f"In map/default.map max_provinces = {max_provinces} is not an integer value.")
 		elif len(pixel_set) >= int(max_provinces):
 			print(f"The max_provinces value {max_provinces} in the map/default.map should be at least 1 higher than the number of different colors in the province.bmp {len(pixel_set)}.")
+		elif int(max_provinces) >= 65536:
+			print(f"OpenVic does not yet support more than 65536 provinces and this script will mention a lot of false positives, if there are more unique colors in the province.bmp.")
 	[DEFINITIONS_DICTIONARY,RGB_DICTIONARY] = check_definition_csv()
 	province_colors_are_in_definition_csv = True
 	if pixel_set.difference(RGB_DICTIONARY.keys()):
@@ -1180,10 +1179,7 @@ def check_positions(OCEAN_SET,LAKES_SET,IMPASSABLE_SET,pixel_set,DEFINITIONS_DIC
 		image_load[w-1,h-1] = unimportant
 	elif ocean not in {image_load[w-2,h-2],image_load[w-2,h-1],image_load[w-1,h-2]}:
 		image_load[w-1,h-1] = unimportant
-	coastal_pixel_set = set()
-	for x in range(w):
-		for y in range(h):
-			coastal_pixel_set.add(image_load[x,y])
+	coastal_pixel_set = set(color for count, color in image.getcolors(65536))
 	while positions.__contains__("position = { "):
 		[provinceID,positions] = positions.split("position = { ",maxsplit=1)
 		counter = 1
@@ -1345,7 +1341,7 @@ def check_rivers():
 					(a,b) = current_river_pixel
 					counter = 0
 					tributary_rivers_counter = 0
-					for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
+					for dx, dy in [(0,-1),(0,1),(-1,0),(1,0)]:
 						nx, ny = a + dx, b + dy
 						if 0 <= nx < w and 0 <= ny < h:
 							if 2 < load_bmp[nx,ny] < 254:
@@ -1355,7 +1351,7 @@ def check_rivers():
 								tributary_rivers.append((nx,ny))
 								tributary_rivers_counter += 1
 								if river_source == (a,b):
-									print(f"{a},{b} there are 2 yellow or red pixels next to each other.")
+									print(f"{a},{b} a tributary or distributary river starts right next to another tributary or distributary river or a river source.")
 							elif 0 == load_bmp[nx,ny]:
 								print(f"{nx},{ny} the river starting here is connected to another starting point.")
 					if counter == 1:
@@ -1376,11 +1372,11 @@ def check_rivers():
 							print(f"{current_river_pixel} has 3 nearby river pixels or 2 and a green start position.")
 							tributary_rivers.append((a,b))
 					else:
-						if tributary_rivers_counter > 0 and started_from_index == (load_bmp[tributary_rivers[len(tributary_rivers)-1]]):
-							if started_from_index == 1:
-								print(f"{tributary_rivers[len(tributary_rivers)-1]} both the start and end point of the tributary river are merged into another river.")
-							else:
-								print(f"{tributary_rivers[len(tributary_rivers)-1]} both the start and end point of the distributary river are split from another river.")
+						for tr_counter in range(tributary_rivers_counter):
+							if 1 == started_from_index == (load_bmp[tributary_rivers[len(tributary_rivers) - 1 - tr_counter]]):
+								print(f"{tributary_rivers[len(tributary_rivers) - 1 - tr_counter]} both the start and end point of the tributary river are merged into another river.")
+							elif 2 == started_from_index == (load_bmp[tributary_rivers[len(tributary_rivers) - 1 - tr_counter]]):
+								print(f"{tributary_rivers[len(tributary_rivers) - 1 - tr_counter]} both the start and end point of the distributary river are split from another river.")
 						if tributary_rivers:
 							current_river_pixel = tributary_rivers[0]
 							river_source = current_river_pixel
@@ -1403,7 +1399,7 @@ def check_rivers():
 					load_bmp[current_river_pixel] = 255
 					(a,b) = current_river_pixel
 					counter = 0
-					for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
+					for dx, dy in [(0,-1),(0,1),(-1,0),(1,0)]:
 						nx, ny = a + dx, b + dy
 						if 0 <= nx < w and 0 <= ny < h:
 							if load_bmp[nx,ny] < 254:
