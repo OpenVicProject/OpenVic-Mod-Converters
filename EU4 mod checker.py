@@ -1483,6 +1483,7 @@ else:
 		[TAG_SET,CAPITAL_DICTIONARY] = check_country_files()
 		check_province_files()
 		check_rivers()
+		check_gfx()
 	else:
 		if not CULTURE_SET:
 			print(f"No cultures could be found in the common/cultures folder.")
