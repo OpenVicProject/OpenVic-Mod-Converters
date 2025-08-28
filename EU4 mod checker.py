@@ -30,12 +30,16 @@ DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output file
 	"REMOVE_NON_EXISTANT_CULTURE":True, # Sometimes cultures are removed as accepted cultures, even though they were not accepted at this date. So maybe some other culture was actually supposed to be removed.
 	"MISSING_PROVINCE_FILE":True, # Some provinces may be placed on a continent or such, but lack a province file, can be ignored as an empty "provinceID.txt" file will simply be generated anyway for the output.
 	"MISSING_PROVINCE_ID":True, # While it is not necessary to use all numbers between 1 and the number of provinces as IDs, maybe you still want to add empty files for such cases, if not you can set it to False.
+	"CITY_POSITION_OUTSIDE_BMP":False, # The position of the city could be outside the bmp, though this currently does not matter for conversion to a Victoria 2 mod.
+	"UNIT_POSITION_OUTSIDE_BMP":False, # The position of the unit could be outside the bmp, though this currently does not matter for conversion to a Victoria 2 mod.
+	"NAME_POSITION_OUTSIDE_BMP":False, # The position of the name could be outside the bmp, though this currently does not matter for conversion to a Victoria 2 mod.
 	"CITY_POSITION":False, # The position of the city could be outside of the province, though this currently does not matter for conversion to a Victoria 2 mod.
 	"UNIT_POSITION":False, # The position of units could be outside of the province, though this currently does not matter for conversion to a Victoria 2 mod.
 	"NAME_POSITION":False, # The position of the name could be outside of the province, though this currently does not matter for conversion to a Victoria 2 mod.
 	"NO_TERRAIN_OVERRIDE": False, # If set to True you get a list of all continental provinces that are not used in any terrain_override, which is not necessary, just something you may want to do.
 	"INCORRECT_TERRAIN": False, # ONLY CHANGE THIS TO TRUE IF THERE ARE NO MORE ERRORS RELATED TO THE MAP! In EU4 it does not matter if the terrain.bmp matches the province being continental or an ocean, however in V2 this is important, so you can choose to automatically generate both the terrain.bmp and rivers.bmp to match this. The new ones will be saved as terrain2.bmp and rivers2.bmp and the generation process for the terrain.bmp is to copy any correct pixel, while incorrect ones will be swapped to ocean or inland_ocean for lakes or the CONTINENTAL_INDEX for continental provinces. If you do not see an error message containing: "If no map issues are mentioned above this message you can create the terrain.bmp and rivers.bmp files with correct pixels." leave this option as False as it either means there are important errors that need to be fixed first or very unlikely, everything is already correct.
-	"COAST_NOT_COASTAL": False # If you want every coastal province to have coastal terrain, change this to True. There will be no exceptions, so don't use this if a mod made some terrain not coastal by choice.
+	"COAST_NOT_COASTAL": False, # If you want every coastal province to have coastal terrain, change this to True. There will be no exceptions, so don't use this if a mod made some terrain not coastal by choice.
+	"MISSING_FLAGS": False #If you want to know which tags that don't have flags set this to True.
 }
 I_READ_THE_INSTRUCTIONS = False # Set this to True after changing all the settings you need to change or want to change and that's it. Now you can run it, if you have a sufficiently new Python version installed. Maybe anything after 3.7 will work, as well as a new enough Pillow version (Python Imaging Library).
 
@@ -113,7 +117,7 @@ def remove_text_between_brackets(text,sub_string,path):
 # creates a set of all cultures and a dictionary {culture_group:{culture:{male_names:" ",female_names:" ",dynasty_names:" "}}}
 def get_cultures():
 	culture_dictionary = dict()
-	for root, dirs, files in os.walk("common/cultures"):
+	for root, dirs, files in os.walk("common/cultures/"):
 		for file in files:
 			text = format_text_in_path(os.path.join(root, file))
 			if text == "  ":
@@ -256,7 +260,7 @@ def get_religions():
 	religion_set = set()
 	COLOR_STRUCTURE = re.compile(r'(?=( color = \{ [0-1]{0,1}["."]{0,1}[0-9]{1,3} [0-1]{0,1}["."]{0,1}[0-9]{1,3} [0-1]{0,1}["."]{0,1}[0-9]{1,3} \} ))')
 	ICON_STRUCTURE = re.compile(r'(?=( icon = [0-9]{1,3} ))')
-	for root, dirs, files in os.walk("common/religions"):
+	for root, dirs, files in os.walk("common/religions/"):
 		for file in files:
 			text = format_text_in_path(os.path.join(root, file))
 			if text == "  ":
@@ -341,7 +345,7 @@ def get_religions():
 
 def get_governments():
 	government_set = set()
-	for root, dirs, files in os.walk("common/governments"):
+	for root, dirs, files in os.walk("common/governments/"):
 		for file in files:
 			text = format_text_in_path(os.path.join(root, file))
 			if text == "  ":
@@ -492,7 +496,8 @@ def get_sorted_dates(text,path):
 def check_country_files():
 	tag_dictionary = dict()
 	path_dictionary = dict()
-	for root, dirs, files in os.walk("history/countries"):
+	capital_dictionary = dict()
+	for root, dirs, files in os.walk("history/countries/"):
 		for file in files:
 			tag = file[:3]
 			if re.fullmatch('[0-9A-Z]{3}',tag):
@@ -512,6 +517,7 @@ def check_country_files():
 			accepted_culture_list = []
 			added_accepted_culture_list = []
 			removed_accepted_culture_list = []
+			capital_dictionary[tag] = []
 			for date in sorted_list:
 				if date == "BASE_DATE":
 					date_text = get_base_date_text(text,sorted_list,path)
@@ -535,7 +541,7 @@ def check_country_files():
 						uniques[index][1] = ""
 					if counter > 0:
 						uniques[index][1] = date_text.split(uniques[index][0],maxsplit=1)[1].split(" ",maxsplit=1)[0]
-						if index < 3:
+						if index < 4:
 							if index == 0:
 								if uniques[index][1] not in GOVERNMENT_SET:
 									print(f"Government {uniques[index][1]} in {path} was not found in the common/governments files")
@@ -548,6 +554,11 @@ def check_country_files():
 								if uniques[index][1] not in RELIGION_SET:
 									print(f"Religion {uniques[index][1]} in {path} was not found in the common/religions files")
 									uniques[index][1] = ""
+							elif index == 3:
+								if re.fullmatch("[0-9]+",uniques[index][1]):
+									capital_dictionary[tag].append(int(uniques[index][1]))
+								else:
+									print(f"The capital {uniques[index][1]} in {path} is not a number.")
 				added_accepted_culture_list = []
 				removed_accepted_culture_list = []
 				add_culture_text = date_text # TODO maybe mention if an accepted culture is the primary culture
@@ -589,7 +600,7 @@ def check_country_files():
 							added_accepted_culture_list.remove(culture)
 					else:
 						print(f"Invalid remove_accepted_culture = {culture} found for {date} in {path}")
-	for root, dirs, files in os.walk("common/country_tags"):
+	for root, dirs, files in os.walk("common/country_tags/"):
 		for file in files:
 			text = format_text_in_path(os.path.join(root, file))
 			if text == "  ":
@@ -616,7 +627,7 @@ def check_country_files():
 				tags_without_path.append(tag)
 		print(f"No path has been set in common/country_tags for these tags from history/countries: {tags_without_path}")
 	COLOR_STRUCTURE = re.compile(r'(?=( color = \{ [0-9]{1,3} [0-9]{1,3} [0-9]{1,3} \} ))')
-	for root, dirs, files in os.walk("common/countries"):
+	for root, dirs, files in os.walk("common/countries/"):
 		for file in files:
 			if file not in path_dictionary:
 				print(f"{file} in common/countries is not used as path in common/country_tags by any of the tags in history/countries or some other error occured")
@@ -633,12 +644,12 @@ def check_country_files():
 	if missing_paths:
 		print(f"These paths have not been found: {missing_paths}")
 	tag_set = set(tag_dictionary.keys())
-	return tag_set
+	return [tag_set,capital_dictionary]
 
 def check_province_files():
 	province_set = set()
 	empty_province_files_set = set()
-	for root, dirs, files in os.walk("history/provinces"):
+	for root, dirs, files in os.walk("history/provinces/"):
 		for file in files:
 			if not re.fullmatch("[1-9]",file[0]):
 				print(f"Province file name does not start with a number from 1 to 9 in history/provinces/{file}")
@@ -657,15 +668,19 @@ def check_province_files():
 				empty_province_files_set.add(int(province_ID))
 				continue
 			sorted_list = get_sorted_dates(text,path)
-			check_date_entries(text,sorted_list,path)
+			province_is_empty = check_date_entries(text,sorted_list,path)
+			if province_is_empty:
+				empty_province_files_set.add(int(province_ID))
 	province_tuple = tuple(sorted(province_set, key=int))
 	counter = 0
-	if DONT_IGNORE_ISSUE["MISSING_PROVINCE_ID"]:
-		for province in province_tuple:
-			counter += 1
-			if province != counter:
+	for province in province_tuple:
+		counter += 1
+		if province != counter:
+			if DONT_IGNORE_ISSUE["MISSING_PROVINCE_ID"]:
 				print(f"No province file found for: {counter} until {province}")
-				counter = province
+			for index in range(counter,province):
+				empty_province_files_set.add(index)
+			counter = province
 	check_continents(province_set,empty_province_files_set)
 	return
 
@@ -675,6 +690,7 @@ def check_date_entries(text,sorted_list,path):
 	current_cores = []
 	added_cores = []
 	removed_cores = []
+	is_empty = True
 	for date in sorted_list:
 		if date == "BASE_DATE":
 			date_text = get_base_date_text(text,sorted_list,path)
@@ -697,9 +713,11 @@ def check_date_entries(text,sorted_list,path):
 		for index in range(len(uniques)):
 			counter = date_text.count(uniques[index][0])
 			if counter > 1:
+				is_empty = False
 				print(f'"{uniques[index][0]}" found {counter} times for date {date} in {path}')
 				uniques[index][1] = 1
 			elif counter == 1:
+				is_empty = False
 				uniques[index][1] = 1
 				if index != 4:
 					unique = date_text.split(uniques[index][0],maxsplit=1)[1].split(" ",maxsplit=1)[0]
@@ -733,6 +751,7 @@ def check_date_entries(text,sorted_list,path):
 		removed_cores = []
 		core_text = date_text
 		while core_text.__contains__(" add_core = "):
+			is_empty = False
 			core_text = core_text.split(" add_core = ",maxsplit=1)[1]
 			tag = str(core_text)[:3]
 			if tag in TAG_SET:
@@ -750,6 +769,7 @@ def check_date_entries(text,sorted_list,path):
 				print(f"Invalid add_core = {tag} found in {path}")
 		remove_core_text = date_text
 		while remove_core_text.__contains__(" remove_core = "):
+			is_empty = False
 			remove_core_text = remove_core_text.split(" remove_core = ",maxsplit=1)[1]
 			tag = str(remove_core_text)[:3]
 			if tag in TAG_SET:
@@ -767,11 +787,12 @@ def check_date_entries(text,sorted_list,path):
 					removed_cores.append(tag)
 			else:
 				print(f"Invalid remove_core = {tag} found for {date} in {path}")
-	return
+	return is_empty
 
 def check_continents(province_set,empty_province_files_set):
 	text = format_text_in_path("map/continent.txt")
 	continent_list = []
+	continent_name_set = set()
 	while text.__contains__("= {"):
 		[continent_name,text] = text.split("= {",maxsplit=1)
 		[provinces,text] = text.split("}",maxsplit=1)
@@ -779,6 +800,7 @@ def check_continents(province_set,empty_province_files_set):
 			provinces = set()
 			continue
 		continent_name = continent_name.strip()
+		continent_name_set.add(continent_name)
 		provinces = set(map(int,provinces.split()))
 		continent_list.append([continent_name,provinces])
 		for entry in provinces:
@@ -816,9 +838,15 @@ def check_continents(province_set,empty_province_files_set):
 	PROVINCE_TERRAIN_DICTIONARY, TERRAIN_OVERRIDE_PROVINCES = check_terrain()
 	inland_ocean = lakes.copy()
 	for terrain in TERRAIN_DICTIONARY["FORCE_INLAND_OCEAN"]:
-		inland_ocean = inland_ocean.union(PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"])
-		water_provinces = water_provinces.union(PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"])
-		combined_continent_set = combined_continent_set.difference(PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"])
+		if "terrain_override" in PROVINCE_TERRAIN_DICTIONARY[terrain]:
+			inland_ocean = inland_ocean.union(PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"])
+			water_provinces = water_provinces.union(PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"])
+			combined_continent_set = combined_continent_set.difference(PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"])
+	if {capital for capital_list in CAPITAL_DICTIONARY.values() for capital in capital_list}.difference(combined_continent_set):
+		for tag in TAG_SET:
+			if tag in CAPITAL_DICTIONARY:
+				if set(CAPITAL_DICTIONARY[tag]) - combined_continent_set:
+					print(f"At least one capital in the history of tag {tag} is not continental or the province simply does not exist: {set(CAPITAL_DICTIONARY[tag]) - combined_continent_set}.")
 	if water_provinces - empty_province_files_set:
 		print(f"These water provinces have some entries in their files: {water_provinces - empty_province_files_set}")
 	image = Image.open("map/provinces.bmp")
@@ -942,9 +970,8 @@ def check_continents(province_set,empty_province_files_set):
 	AREA_SET = check_area(combined_continent_set,lakes,impassable)
 	check_positions(ocean,lakes,impassable,pixel_set,DEFINITIONS_DICTIONARY)
 	province_set = combined_continent_set.union(province_set,water_provinces)
-	check_localisation(province_set,AREA_SET)
+	check_localisation(continent_name_set,province_set,AREA_SET)
 	return
-
 
 def check_terrain():
 	text = format_text_in_path("map/terrain.txt")
@@ -988,8 +1015,6 @@ def check_terrain():
 			terrain_list.remove(terrain_list[0])
 		if "color" not in province_terrain_dictionary[current_terrain]:
 			print(f"The terrain {current_terrain} has no color.")
-		if "terrain_override" not in province_terrain_dictionary[current_terrain]:
-			print(f"The terrain {current_terrain} has no terrain_override part.")
 	return province_terrain_dictionary,terrain_override_provinces
 
 def check_area(combined_continent_set,lakes,impassable):
@@ -1198,13 +1223,16 @@ def check_positions(OCEAN_SET,LAKES_SET,IMPASSABLE_SET,pixel_set,DEFINITIONS_DIC
 			continue
 		[city_x,city_y,unit_x,unit_y,name_x,name_y,port_x,port_y,positions] = positions.split(" ",maxsplit=8)
 		if int(float(city_x)) < 0 or int(float(city_y)) < 0 or int(float(city_x)) >= w or int(float(city_y)) >= h:
-			print(f"The city position {city_x},{city_y} for province {provinceID} is outside the provinces.bmp with size {w},{h}.")
+			if DONT_IGNORE_ISSUE["CITY_POSITION_OUTSIDE_BMP"]:
+				print(f"The city position {city_x},{city_y} for province {provinceID} is outside the provinces.bmp with size {w},{h}.")
 			city_x = city_y = -1
 		if int(float(unit_x)) < 0 or int(float(unit_y)) < 0 or int(float(unit_x)) >= w or int(float(unit_y)) >= h:
-			print(f"The unit position {unit_x},{unit_y} for province {provinceID} is outside the provinces.bmp with size {w},{h}.")
+			if DONT_IGNORE_ISSUE["UNIT_POSITION_OUTSIDE_BMP"]:
+				print(f"The unit position {unit_x},{unit_y} for province {provinceID} is outside the provinces.bmp with size {w},{h}.")
 			unit_x = unit_y = -1
 		if int(float(name_x)) < 0 or int(float(name_y)) < 0 or int(float(name_x)) >= w or int(float(name_y)) >= h:
-			print(f"The name position {name_x},{name_y} for province {provinceID} is outside the provinces.bmp with size {w},{h}.")
+			if DONT_IGNORE_ISSUE["NAME_POSITION_OUTSIDE_BMP"]:
+				print(f"The name position {name_x},{name_y} for province {provinceID} is outside the provinces.bmp with size {w},{h}.")
 			name_x = name_y = -1
 		if int(float(port_x)) < 0 or int(float(port_y)) < 0 or int(float(port_x)) >= w or int(float(port_y)) >= h:
 			print(f"The port position {port_x},{port_y} for province {provinceID} is outside the provinces.bmp with size {w},{h}.")
@@ -1248,7 +1276,7 @@ def check_positions(OCEAN_SET,LAKES_SET,IMPASSABLE_SET,pixel_set,DEFINITIONS_DIC
 				print(f"The rounded port position {port_x},{h-1-port_y} for province {provinceID}, which would be {port_x},{port_y} in GIMP is neither a coastal nor an ocean pixel, if the province is not supposed to have a port, some stray pixel is somewhere next to an ocean.")
 	return
 
-def check_localisation(PROVINCE_SET,AREA_SET):
+def check_localisation(CONTINENT_NAME_SET,PROVINCE_SET,AREA_SET):
 	localisation_dictionary = dict()
 	for tag in TAG_SET:
 		if tag not in {"REB","NAT","PIR"}:
@@ -1274,10 +1302,18 @@ def check_localisation(PROVINCE_SET,AREA_SET):
 			print(f"The religion {religion} is already used for other localisation, likely a culture or area, less likely a TAG, TAG_ADJ or PROV?.")
 		else:
 			localisation_dictionary[religion] = 0
+	for government in GOVERNMENT_SET:
+		if government in localisation_dictionary:
+			print(f"The government {government} is already used for other localisation, maybe a culture, religion, area or less likely a TAG, TAG_ADJ or PROV? already has the same name.")
+		else:
+			localisation_dictionary[government] = 0
+	for continent in CONTINENT_NAME_SET:
+		if continent in localisation_dictionary:
+			print(f"The continent {continent} is already used for other localisation, maybe a culture, religion, area, government or less likely a TAG, TAG_ADJ or PROV? already has the same name.")
 	for language in LANGUAGES:
 		l_language_yml = "_l_" + language + ".yml"
 		language_dictionary = localisation_dictionary.copy()
-		for root, dirs, files in os.walk("localisation"):
+		for root, dirs, files in os.walk("localisation/"):
 			for file in files:
 				if file.__contains__(l_language_yml):
 					with open(os.path.join(root, file),'r',encoding="utf-8-sig",errors='replace') as loc:
@@ -1289,16 +1325,16 @@ def check_localisation(PROVINCE_SET,AREA_SET):
 								if not value.__contains__('"'):
 									continue
 								if value.count('"') < 2:
-									print(f'There is only one " behind the : in the line {line} in file {os.path.join(root, file)}')
+									print(f'There is only one " behind the : in the line ({line.strip()}) in file {os.path.join(root, file)}')
 									continue
 								if key.strip() in language_dictionary and key.strip() != "":
 									language_dictionary[key.strip()] += 1
 		for key in language_dictionary:
 			if language_dictionary[key] != 1:
 				if language_dictionary[key] == 0:
-					print(f"The language {language} has no localisation for {key} in the entered files")
+					print(f"The language {language} has no localisation for {key} in the localisation folder.")
 				else:
-					print(f"The language {language} has {language_dictionary[key]} localisations for {key} in the entered files")
+					print(f"The language {language} has {language_dictionary[key]} localisations for {key} in the localisation folder.")
 	if LOCALISATION_FILES:
 		for files in LOCALISATION_FILES:
 			with open(files,'r',encoding="utf-8-sig",errors='replace') as file:
@@ -1416,6 +1452,25 @@ def check_rivers():
 						check_for_more = False
 	return
 
+def check_gfx():
+	if os.path.exists("gfx/interface/icon_religion_small.dds"):
+		religion_dds = Image.open("gfx/interface/icon_religion_small.dds")
+		w,h = religion_dds.size
+		if h != 32:
+			print(f"The height of the icon_religion_small.dds is not 32.")
+		if w % h != 0:
+			print(f"The width of the icon_religion_small.dds is not a multiple of the height.")
+	else:
+		print(f"There is no icon_religion_small.dds in gfx/interface/.")
+	for tag in TAG_SET:
+		if os.path.exists("gfx/flags/" + tag + ".tga"):
+			w,h = Image.open("gfx/flags/" + tag + ".tga").size
+			if not 128 == w == h:
+				print(f"The flag {tag}.tga does not have the size 128 x 128.")
+		elif DONT_IGNORE_ISSUE["MISSING_FLAGS"]:
+			print(f"There is no flag for {tag}.")
+	return
+
 if not I_READ_THE_INSTRUCTIONS:
 	print("READ AND FOLLOW THE INSTRUCTIONS AT THE START OF THE FILE! For some mods you still have to make minimal changes yourself.")
 else:
@@ -1425,7 +1480,7 @@ else:
 	GOVERNMENT_SET = get_governments()
 	if CULTURE_SET and RELIGION_SET and GOVERNMENT_SET:
 		DATE_STRUCTURE = re.compile(r'[^-0-9]{1}[-]{0,1}[0-9]{1,5}["."][0-9]{1,2}["."][0-9]{1,2} = {')
-		TAG_SET = check_country_files()
+		[TAG_SET,CAPITAL_DICTIONARY] = check_country_files()
 		check_province_files()
 		check_rivers()
 	else:
