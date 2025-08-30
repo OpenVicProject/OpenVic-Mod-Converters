@@ -1,5 +1,5 @@
 #%%
-# Place this Python script into whatever mod folder you want to check. The mod needs to have the common/countries, common/country_tags, common/cultures, common/religions, common/governments, history/countries and history/provinces folders and map/area.txt, map/climate.txt, map/continent.txt, map/definition.csv and map/default.map files as well as the provinces.bmp, rivers.bmp and terrain.bmp. If those are not present, either because the mod uses the base game files or relies on another mod you have to copy them or can't use this script.
+# Place this Python script into whatever mod folder you want to check. The mod needs to have the common/countries, common/country_tags, common/cultures, common/religions, common/governments, history/countries and history/provinces folders and map/area.txt, map/climate.txt, map/continent.txt, map/definition.csv and map/default.map files as well as the provinces.bmp, rivers.bmp and terrain.bmp. If those are not present, either because the mod uses the base game files or relies on another mod you have to copy them or can't use this script. If there are any DS_Store files they need to be removed.
 from PIL import Image
 import re
 import os
@@ -364,6 +364,31 @@ def get_governments():
 				return set()
 	return government_set
 
+def get_tech_groups():
+	tech_group_set = set()
+	if os.path.exists("common/technology.txt"):
+		text = format_text_in_path("common/technology.txt")
+		if text.count(" groups = {") != 1:
+			print(f'There was more than one " groups = {{" string in the common/technology.txt file.')
+			return set()
+		counter = 1
+		text = text.split(" groups = {",maxsplit=1)[1]
+		for i in range(len(text)):
+			if text[i] == "{":
+				counter += 1
+				if counter == 2:
+					if text[:i].rsplit(" =",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1] in tech_group_set:
+						print(f"The technology group {text[:i].rsplit(" =",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1]} occurs twice in common/technology.txt.")
+					else:
+						tech_group_set.add(text[:i].rsplit(" =",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1])
+			elif text[i] == "}":
+				counter -= 1
+				if counter == 0:
+					break
+	else:
+		print(f"There is no technology.txt file in the common folder.")
+	return tech_group_set
+
 # gets all the text from ?.?.? = { text } for a specified date, including further occurances of it and returns them, but adds " # " between them or returns "#" if either the date entry is empty or none is found or an error occurs.
 def get_date_text(text,date,path):
 	date_text = " "
@@ -512,6 +537,9 @@ def check_country_files():
 				continue
 			path = os.path.join(root, file)
 			text = format_text_in_path(path)
+			text = remove_text_between_brackets(text," monarch = {",path)
+			text = remove_text_between_brackets(text," queen = {",path)
+			text = remove_text_between_brackets(text," heir = {",path)
 			sorted_list = get_sorted_dates(text,path)
 			uniques = [[" government = ",""],[" primary_culture = ",""],[" religion = ",""],[" capital = ",""],[" technology_group = ",""]]
 			accepted_culture_list = []
@@ -541,24 +569,27 @@ def check_country_files():
 						uniques[index][1] = ""
 					if counter > 0:
 						uniques[index][1] = date_text.split(uniques[index][0],maxsplit=1)[1].split(" ",maxsplit=1)[0]
-						if index < 4:
-							if index == 0:
-								if uniques[index][1] not in GOVERNMENT_SET:
-									print(f"Government {uniques[index][1]} in {path} was not found in the common/governments files")
-									uniques[index][1] = ""
-							elif index == 1:
-								if uniques[index][1] not in CULTURE_SET:
-									print(f"Culture {uniques[index][1]} in {path} was not found in the common/cultures files")
-									uniques[index][1] = ""
-							elif index == 2:
-								if uniques[index][1] not in RELIGION_SET:
-									print(f"Religion {uniques[index][1]} in {path} was not found in the common/religions files")
-									uniques[index][1] = ""
-							elif index == 3:
-								if re.fullmatch("[0-9]+",uniques[index][1]):
-									capital_dictionary[tag].append(int(uniques[index][1]))
-								else:
-									print(f"The capital {uniques[index][1]} in {path} is not a number.")
+						if index == 0:
+							if uniques[index][1] not in GOVERNMENT_SET:
+								print(f"Government {uniques[index][1]} in {path} was not found in the common/governments files")
+								uniques[index][1] = ""
+						elif index == 1:
+							if uniques[index][1] not in CULTURE_SET:
+								print(f"Culture {uniques[index][1]} in {path} was not found in the common/cultures files")
+								uniques[index][1] = ""
+						elif index == 2:
+							if uniques[index][1] not in RELIGION_SET:
+								print(f"Religion {uniques[index][1]} in {path} was not found in the common/religions files")
+								uniques[index][1] = ""
+						elif index == 3:
+							if re.fullmatch("[0-9]+",uniques[index][1]):
+								capital_dictionary[tag].append(int(uniques[index][1]))
+							else:
+								print(f"The capital {uniques[index][1]} in {path} is not a number.")
+						elif index == 3:
+							if uniques[index][1] not in TECH_GROUP_SET:
+								print(f"Technology group {uniques[index][1]} in {path} was not found in the common/religions files")
+								uniques[index][1] = ""
 				added_accepted_culture_list = []
 				removed_accepted_culture_list = []
 				add_culture_text = date_text # TODO maybe mention if an accepted culture is the primary culture
@@ -619,7 +650,7 @@ def check_country_files():
 						print(f"In common/country_tags a path is used twice: {country_path}")
 					text = first + second
 			if "" != text.strip():
-				print(f"Not all paths have been used by a tag in {os.path.join(root, file)} specifically the following are left: {text.strip()}")
+				print(f"There is no tag in history/countries for some paths in {os.path.join(root, file)} specifically the following are left: {text.strip()}")
 	if "No path" in tag_dictionary.values():
 		tags_without_path = []
 		for tag in tag_dictionary:
@@ -800,6 +831,8 @@ def check_continents(province_set,empty_province_files_set):
 			provinces = set()
 			continue
 		continent_name = continent_name.strip()
+		if continent_name == "island_check_provinces":
+			continue
 		continent_name_set.add(continent_name)
 		provinces = set(map(int,provinces.split()))
 		continent_list.append([continent_name,provinces])
@@ -1027,8 +1060,10 @@ def check_area(combined_continent_set,lakes,impassable):
 	for entry in text_list:
 		if area_name in area_set:
 			print(f"At least 2 areas have the same name: {area_name}")
-		else:
+		elif set(entry.split("}",maxsplit=1)[0].split()):
 			area_set.add(area_name)
+		else:
+			continue
 		for province in set(map(int,entry.split("}",maxsplit=1)[0].split())):
 			if province in area_province_set:
 				print(f"The province {province} is already in another area.")
@@ -1303,13 +1338,21 @@ def check_localisation(CONTINENT_NAME_SET,PROVINCE_SET,AREA_SET):
 		else:
 			localisation_dictionary[religion] = 0
 	for government in GOVERNMENT_SET:
-		if government in localisation_dictionary:
-			print(f"The government {government} is already used for other localisation, maybe a culture, religion, area or less likely a TAG, TAG_ADJ or PROV? already has the same name.")
+		if government + "_name" in localisation_dictionary:
+			print(f"The government {government + "_name"} is already used for other localisation, maybe a culture, religion or area already has the same name.")
 		else:
-			localisation_dictionary[government] = 0
+			localisation_dictionary[government + "_name"] = 0
 	for continent in CONTINENT_NAME_SET:
 		if continent in localisation_dictionary:
-			print(f"The continent {continent} is already used for other localisation, maybe a culture, religion, area, government or less likely a TAG, TAG_ADJ or PROV? already has the same name.")
+			print(f"The continent {continent} is already used for other localisation, maybe a culture, religion or area already has the same name.")
+		else:
+			localisation_dictionary[continent] = 0
+	for tech_group in TECH_GROUP_SET:
+		if tech_group in localisation_dictionary:
+			print(f"The technology group {tech_group} is already used for other localisation, maybe a culture, religion, area, government, continent or less likely a TAG, TAG_ADJ or PROV? already has the same name.")
+		else:
+			localisation_dictionary[tech_group] = 0
+	THESE_KEYS_CAN_MISS = {"monarchy_name","theocracy_name","republic_name","native_name","tribal_name","europe","asia","africa","north_america","south_america","oceania","new_world"}
 	for language in LANGUAGES:
 		l_language_yml = "_l_" + language + ".yml"
 		language_dictionary = localisation_dictionary.copy()
@@ -1331,9 +1374,9 @@ def check_localisation(CONTINENT_NAME_SET,PROVINCE_SET,AREA_SET):
 									language_dictionary[key.strip()] += 1
 		for key in language_dictionary:
 			if language_dictionary[key] != 1:
-				if language_dictionary[key] == 0:
+				if language_dictionary[key] == 0 and key not in THESE_KEYS_CAN_MISS:
 					print(f"The language {language} has no localisation for {key} in the localisation folder.")
-				else:
+				elif language_dictionary[key] > 1:
 					print(f"The language {language} has {language_dictionary[key]} localisations for {key} in the localisation folder.")
 	if LOCALISATION_FILES:
 		for files in LOCALISATION_FILES:
@@ -1462,7 +1505,7 @@ def check_gfx():
 			print(f"The width of the icon_religion_small.dds is not a multiple of the height.")
 	else:
 		print(f"There is no icon_religion_small.dds in gfx/interface/.")
-	for tag in TAG_SET:
+	for tag in TAG_SET - {"REB","NAT","PIR"}:
 		if os.path.exists("gfx/flags/" + tag + ".tga"):
 			w,h = Image.open("gfx/flags/" + tag + ".tga").size
 			if not 128 == w == h:
@@ -1478,7 +1521,8 @@ else:
 	CULTURE_SET = get_cultures()
 	RELIGION_SET = get_religions()
 	GOVERNMENT_SET = get_governments()
-	if CULTURE_SET and RELIGION_SET and GOVERNMENT_SET:
+	TECH_GROUP_SET = get_tech_groups()
+	if CULTURE_SET and RELIGION_SET and GOVERNMENT_SET and TECH_GROUP_SET:
 		DATE_STRUCTURE = re.compile(r'[^-0-9]{1}[-]{0,1}[0-9]{1,5}["."][0-9]{1,2}["."][0-9]{1,2} = {')
 		[TAG_SET,CAPITAL_DICTIONARY] = check_country_files()
 		check_province_files()
@@ -1491,4 +1535,6 @@ else:
 			print(f"No religions could be found in the common/religions folder.")
 		if not GOVERNMENT_SET:
 			print(f"No governments could be found in the common/governments folder.")
+		if not TECH_GROUP_SET and os.path.exists("common/technology.txt"):
+			print(f"No technology groups could be found in common/technology.txt.")
 #%%
