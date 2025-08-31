@@ -1374,7 +1374,7 @@ def check_localisation(CONTINENT_NAME_SET,PROVINCE_SET,AREA_SET):
 									language_dictionary[key.strip()] += 1
 		for key in language_dictionary:
 			if language_dictionary[key] != 1:
-				if language_dictionary[key] == 0 and key not in THESE_KEYS_CAN_MISS:
+				if language_dictionary[key] == 0 and (key not in THESE_KEYS_CAN_MISS or language not in {"english","french","german","polish","spanish"}):
 					print(f"The language {language} has no localisation for {key} in the localisation folder.")
 				elif language_dictionary[key] > 1:
 					print(f"The language {language} has {language_dictionary[key]} localisations for {key} in the localisation folder.")
@@ -1496,6 +1496,26 @@ def check_rivers():
 	return
 
 def check_gfx():
+	terrain = Image.open("map/terrain.bmp")
+	terrain_w,terrain_h = terrain.size
+	if os.path.exists("map/terrain/colormap_spring.dds"):
+		colormap = Image.open("map/terrain/colormap_spring.dds")
+		w,h = colormap.size
+		if terrain_w % w != 0:
+			print(f"The width of the terrain.bmp is not a multiple of the width of the colormap_spring.dds, while not necessary the result will probably look worse than if it was.")
+		if terrain_h % h != 0:
+			print(f"The height of the terrain.bmp is not a multiple of the height of the colormap_spring.dds, while not necessary the result will probably look worse than if it was.")
+	else:
+		print(f"There is no map/terrain/colormap_spring.dds image.")
+	if os.path.exists("map/terrain/colormap_water.dds"):
+		colormap = Image.open("map/terrain/colormap_water.dds")
+		w,h = colormap.size
+		if terrain_w % w != 0:
+			print(f"The width of the terrain.bmp is not a multiple of the width of the colormap_water.dds, while not necessary the result will probably look worse than if it was.")
+		if terrain_h % h != 0:
+			print(f"The height of the terrain.bmp is not a multiple of the height of the colormap_water.dds, while not necessary the result will probably look worse than if it was.")
+	else:
+		print(f"There is no map/terrain/colormap_water.dds image.")
 	if os.path.exists("gfx/interface/icon_religion_small.dds"):
 		religion_dds = Image.open("gfx/interface/icon_religion_small.dds")
 		w,h = religion_dds.size

@@ -1,0 +1,15 @@
+#name = "War of Northern Aggression"
+32767.1.1 = {
+	add_attacker = USA
+	add_defender = CSA
+	war_goal = {
+		casus_belli = civil_war
+		actor = USA
+		receiver = CSA
+	}
+	war_goal = {
+		casus_belli = status_quo
+		actor = CSA
+		receiver = USA
+	}
+}

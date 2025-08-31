@@ -1,0 +1,38 @@
+sprite = 10
+strata = poor
+allowed_to_vote = no
+is_slave = yes
+color = { 17 17 17 }
+unemployment = yes
+
+rebel = {
+	irregular = 1
+}
+
+everyday_needs = {
+	coal = 1
+}
+
+luxury_needs = {
+	opium = 1
+}
+
+ideologies = {
+	liberal = {
+		factor = 4
+	}
+	conservative = {
+		factor = 1
+	}
+}
+issues = {
+	full_citizenship = {
+		factor = 3
+	}
+	no_slavery = {
+		factor = 5
+	}
+	yes_slavery = {
+		factor = 2
+	}
+}

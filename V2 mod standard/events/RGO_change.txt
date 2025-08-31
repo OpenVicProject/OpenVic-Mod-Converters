@@ -1,0 +1,41 @@
+# RUBBER EVENT
+
+province_event = {
+	id = 1107
+	title = "EVTNAME1107"
+	desc = "EVTDESC1107"
+
+	trigger = {
+		year = 1880
+		trade_goods = dye
+		OR = {
+			owner = {
+				part_of_sphere = yes
+				sphere_owner = {
+					or = {
+					invention = daimlers_automobile
+					invention = edison_light_bulb
+					infiltration = 1
+					aeronautics = 1
+					}
+				}
+			}
+			owner = {
+				or = {
+					invention = daimlers_automobile
+					invention = edison_light_bulb
+					infiltration = 1
+					aeronautics = 1
+				}
+			}
+			year = 1900
+		}
+	}
+
+	mean_time_to_happen = { months = 36 }
+
+	option = {
+		name = "EVTOPTA1107"
+		trade_goods = rubber
+	}
+}
