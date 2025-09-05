@@ -22,6 +22,7 @@ DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output file
 	"IDENTICAL_DATES":True, # This mentions if one date appears multiple times in the same file, but their entries get combined anyway, so you can ignore this, if you don't want to combine the entries.
 	"DUPLICATE_DATES":True, # 1.1.1 and 01.01.01 entries do not get combined and are applied in whatever order they are found first, so you have to check those.
 	"DUPLICATE_NAMES":True, # Sometimes the male, female or dynasty names lists can contain duplicates, which does nothing, so you can ignore this, if you don't want to remove them.
+	"LONG_NAMES":True, # Sometimes names can be quite long, so maybe the quotation marks where done wrong.
 	"DUPLICATE_CORES":True, # Sometimes cores that already exist are added again, which does nothing, so you can ignore this, if you don't want to remove such duplicates.
 	"DUPLICATE_REMOVAL_CORE":True, # Cores may be removed twice for the same date, which does nothing, so you can ignore this.
 	"REMOVE_NON_EXISTANT_CORE":True, # Sometimes cores are removed even though they were not present at this date. So maybe some other core was actually supposed to be removed.
@@ -180,7 +181,7 @@ def get_cultures():
 						else:
 							while name_string.count('"') > 1:
 								[first_part,name,second_part] = name_string.split('"',maxsplit=2)
-								if name.count(" ") > 4 or len(name) > 50:
+								if DONT_IGNORE_ISSUE["LONG_NAMES"] and name.count(" ") > 4 or len(name) > 50:
 									print(f"The name {name} seems to be rather long, is this intended?")
 								name_list.append('"' + name.strip() + '"')
 								name_string = first_part + " " + second_part
@@ -222,7 +223,7 @@ def get_cultures():
 					else:
 						while name_string.count('"') > 1:
 							[first_part,name,second_part] = name_string.split('"',maxsplit=2)
-							if name.count(" ") > 4 or len(name) > 50:
+							if DONT_IGNORE_ISSUE["LONG_NAMES"] and name.count(" ") > 4 or len(name) > 50:
 								print(f"The name {name} seems to be rather long, is this intended?")
 							name_list.append('"' + name.strip() + '"')
 							name_string = first_part + " " + second_part
@@ -321,7 +322,7 @@ def get_religions():
 					print(f"Duplicate religion {religion} in religious group {religion_group} in common/religions/{file}")
 				else:
 					icon = icons[i].split(" ")[3]
-					color = tuple(colors[i].split(" ")[4:7]) #TODO divide by 255, if values above 1
+					color = tuple(colors[i].split(" ")[4:7])
 					religion_dictionary[religion_group][religion] = dict()
 					religion_dictionary[religion_group][religion]["icon"] = icon
 					religion_dictionary[religion_group][religion]["color"] = color
@@ -677,6 +678,50 @@ def check_country_files():
 	tag_set = set(tag_dictionary.keys())
 	return [tag_set,capital_dictionary]
 
+def check_terrain():
+	text = format_text_in_path("map/terrain.txt")
+	terrain = text.split("categories = {",maxsplit=1)[1]
+	counter = 1
+	for index in range(len(terrain)):
+		if terrain[index] == "{":
+			counter += 1
+		elif terrain[index] == "}":
+			counter -= 1
+			if counter == 0:
+				terrain = terrain[:index - 1]
+				break
+	if terrain.__contains__(" pti = { type = pti } "):
+		terrain = " ".join(terrain.split(" pti = { type = pti } ",maxsplit=1))
+		if terrain.__contains__("pti = { type = pti }"):
+			print('The "pti = {{ type = pti }}" part was found at least twice in map/terrain.txt.')
+	else:
+		print(f'The " pti = {{ type = pti }} " part was not found in map/terrain.txt.')
+	terrain_list = terrain.split(" = {")
+	province_terrain_dictionary = dict()
+	terrain_override_provinces = set()
+	while len(terrain_list) > 1:
+		current_terrain = terrain_list[0].rsplit(" ",maxsplit=1)[1]
+		province_terrain_dictionary[current_terrain] = dict()
+		terrain_list.remove(terrain_list[0])
+		while terrain_list[0].rsplit(" ",maxsplit=1)[1] in {"color","terrain_override"}:
+			if terrain_list[0].rsplit(" ",maxsplit=1)[1] == "color":
+				if "color" in province_terrain_dictionary[current_terrain]:
+					print(f"The terrain {current_terrain} has at least 2 colors.")
+				province_terrain_dictionary[current_terrain]["color"] = terrain_list[1].split("}",maxsplit=1)[0]
+			else:
+				if "terrain_override" in province_terrain_dictionary[current_terrain]:
+					print(f"The terrain {current_terrain} has at least 2 terrain_override parts.")
+				additional_override = set(map(int,terrain_list[1].split("}",maxsplit=1)[0].split()))
+				province_terrain_dictionary[current_terrain]["terrain_override"] = additional_override
+				for prov in additional_override:
+					if prov in terrain_override_provinces:
+						print(f"The province {prov} in the terrain override of {current_terrain} is already used in another terrain override.")
+				terrain_override_provinces = terrain_override_provinces.union(additional_override)
+			terrain_list.remove(terrain_list[0])
+		if "color" not in province_terrain_dictionary[current_terrain]:
+			print(f"The terrain {current_terrain} has no color.")
+	return [province_terrain_dictionary,terrain_override_provinces]
+
 def check_province_files():
 	province_set = set()
 	empty_province_files_set = set()
@@ -868,7 +913,6 @@ def check_continents(province_set,empty_province_files_set):
 	leftover_provinces = province_set - combined_continent_set - ocean - lakes
 	if leftover_provinces:
 		print(f"Some provinces are neither a part of a continent, ocean or lake: {leftover_provinces}")
-	PROVINCE_TERRAIN_DICTIONARY, TERRAIN_OVERRIDE_PROVINCES = check_terrain()
 	inland_ocean = lakes.copy()
 	for terrain in TERRAIN_DICTIONARY["FORCE_INLAND_OCEAN"]:
 		if "terrain_override" in PROVINCE_TERRAIN_DICTIONARY[terrain]:
@@ -1005,50 +1049,6 @@ def check_continents(province_set,empty_province_files_set):
 	province_set = combined_continent_set.union(province_set,water_provinces)
 	check_localisation(continent_name_set,province_set,AREA_SET)
 	return
-
-def check_terrain():
-	text = format_text_in_path("map/terrain.txt")
-	terrain = text.split("categories = {",maxsplit=1)[1]
-	counter = 1
-	for index in range(len(terrain)):
-		if terrain[index] == "{":
-			counter += 1
-		elif terrain[index] == "}":
-			counter -= 1
-			if counter == 0:
-				terrain = terrain[:index - 1]
-				break
-	if terrain.__contains__(" pti = { type = pti } "):
-		terrain = " ".join(terrain.split(" pti = { type = pti } ",maxsplit=1))
-		if terrain.__contains__("pti = { type = pti }"):
-			print('The "pti = {{ type = pti }}" part was found at least twice in map/terrain.txt.')
-	else:
-		print(f'The " pti = {{ type = pti }} " part was not found in map/terrain.txt.')
-	terrain_list = terrain.split(" = {")
-	province_terrain_dictionary = dict()
-	terrain_override_provinces = set()
-	while len(terrain_list) > 1:
-		current_terrain = terrain_list[0].rsplit(" ",maxsplit=1)[1]
-		province_terrain_dictionary[current_terrain] = dict()
-		terrain_list.remove(terrain_list[0])
-		while terrain_list[0].rsplit(" ",maxsplit=1)[1] in {"color","terrain_override"}:
-			if terrain_list[0].rsplit(" ",maxsplit=1)[1] == "color":
-				if "color" in province_terrain_dictionary[current_terrain]:
-					print(f"The terrain {current_terrain} has at least 2 colors.")
-				province_terrain_dictionary[current_terrain]["color"] = terrain_list[1].split("}",maxsplit=1)[0]
-			else:
-				if "terrain_override" in province_terrain_dictionary[current_terrain]:
-					print(f"The terrain {current_terrain} has at least 2 terrain_override parts.")
-				additional_override = set(map(int,terrain_list[1].split("}",maxsplit=1)[0].split()))
-				province_terrain_dictionary[current_terrain]["terrain_override"] = additional_override
-				for prov in additional_override:
-					if prov in terrain_override_provinces:
-						print(f"The province {prov} in the terrain override of {current_terrain} is already used in another terrain override.")
-				terrain_override_provinces = terrain_override_provinces.union(additional_override)
-			terrain_list.remove(terrain_list[0])
-		if "color" not in province_terrain_dictionary[current_terrain]:
-			print(f"The terrain {current_terrain} has no color.")
-	return province_terrain_dictionary,terrain_override_provinces
 
 def check_area(combined_continent_set,lakes,impassable):
 	area_province_set = set()
@@ -1532,6 +1532,25 @@ def check_gfx():
 				print(f"The flag {tag}.tga does not have the size 128 x 128.")
 		elif DONT_IGNORE_ISSUE["MISSING_FLAGS"]:
 			print(f"There is no flag for {tag}.")
+	terrain_set = set(PROVINCE_TERRAIN_DICTIONARY.keys())
+	for root, dirs, files in os.walk("gfx\\interface\\"):
+		for file in files:
+			if file.startswith("colony_terrain_"):
+				w,h = Image.open(os.path.join(root, file)).size
+				if (w,h) != (330,85):
+					print(f"{os.path.join(root, file)} does not have the size 330,85")
+				if not file.endswith(".dds"):
+					print(f"{os.path.join(root, file)} is not a .dds file")
+					continue
+				terrain = file.split("colony_terrain_",maxsplit=1)[1].rsplit(".dds",maxsplit=1)[0]
+				if terrain in terrain_set:
+					terrain_set.remove(terrain)
+				elif terrain in PROVINCE_TERRAIN_DICTIONARY:
+					print(f"The terrain {terrain} has at least 2 terrain pictures, one at {os.path.join(root, file)}")
+				else:
+					print(f"The terrain {terrain} is not in map/terrain.txt, but there is a picture for it.")
+	if terrain_set:
+		print(f"Some terrain does not have a picture in the gfx/interface folder, specifically: {terrain_set}")
 	return
 
 if not I_READ_THE_INSTRUCTIONS:
@@ -1545,6 +1564,7 @@ else:
 	if CULTURE_SET and RELIGION_SET and GOVERNMENT_SET and TECH_GROUP_SET:
 		DATE_STRUCTURE = re.compile(r'[^-0-9]{1}[-]{0,1}[0-9]{1,5}["."][0-9]{1,2}["."][0-9]{1,2} = {')
 		[TAG_SET,CAPITAL_DICTIONARY] = check_country_files()
+		[PROVINCE_TERRAIN_DICTIONARY, TERRAIN_OVERRIDE_PROVINCES] = check_terrain()
 		check_province_files()
 		check_rivers()
 		check_gfx()
