@@ -7,7 +7,6 @@ import os
 START_DATE = "1444.11.11" # Replace 1444.11.11 with the intended start date in the form years.months.days, unless it would either be a 29th February as those do neither exist in OpenVic nor Victoria 2 and will be replaced with 28th February and for OpenVic it must be a date within the range 1.1.1 to 65535.12.31 or if the output is intended for Victoria 2, i assume dates must be after 1.1.1 or even later, but i am not sure about the exact details. Any input that is not valid will be replaced with 1444.11.11. The history will be applied until the start date, including identical dates like 01444.11.11 and error messages will be shown, for example if the province has only a religion or culture, but not both at the start date.
 ENCODING = "windows-1252" # Change this to whatever the encoding of the mod is, most likely it is either "utf-8" or "windows-1252". If it is mixed and you want to be able to automatically convert the mod to an OpenVic mod, you currently would have to pick one and convert the files with the other encoding.
 LANGUAGES = ["english"] # Add or remove whatever language, where you want to check the Victoria 2/OpenVic related localisation. You can also leave the brackets empty [] if you want to search for specific files instead, to ensure that the localisation is only present in those.
-LOCALISATION_FILES = [] # Add the localisation files with the province, area and country names in the brackets, if you want to know whether all are actually there, rather than somewhere else in the localisation folder. For example for base EU4 it would look like: ["localisation/countries_l_english.yml","localisation/areas_regions_l_english.yml","localisation/prov_names_l_english.yml"] while for a mod these files or at least some of them are likely named different and in the replace folder, so the path would instead be "localisation/replace/???.yml"
 TERRAIN_DICTIONARY = {
 	"OCEAN_INDEX": 15, # Replace this number, if the mod changes the default EU4 index values for the ocean and inland ocean, which can be found in the map/terrain.txt by looking at the type = ocean/inland_ocean { color = { ?? } } at the end of the file or map/terrain.bmp for example by using GIMP and selecting an ocean/inland_ocean pixel with the color picker which will show the index.
 	"INLAND_OCEAN_INDEX": 17, # Same as with OCEAN_INDEX.
@@ -1352,6 +1351,15 @@ def check_localisation(CONTINENT_NAME_SET,PROVINCE_SET,AREA_SET):
 			print(f"The technology group {tech_group} is already used for other localisation, maybe a culture, religion, area, government, continent or less likely a TAG, TAG_ADJ or PROV? already has the same name.")
 		else:
 			localisation_dictionary[tech_group] = 0
+	for terrain in set(PROVINCE_TERRAIN_DICTIONARY.keys()) - {"ocean","inland_ocean"}:
+		if terrain in localisation_dictionary:
+			print(f"The terrain {terrain} is already used for other localisation, maybe a culture, religion, area, government, continent, technology group or less likely a TAG, TAG_ADJ or PROV? already has the same name.")
+		else:
+			localisation_dictionary[terrain] = 0
+		if terrain + "_desc" in localisation_dictionary:
+			print(f"The terrain {terrain} is already used for other localisation, maybe a culture, religion, area, government, continent, technology group or less likely a TAG, TAG_ADJ or PROV? already has the same name.")
+		else:
+			localisation_dictionary[terrain + "_desc"] = 0
 	THESE_KEYS_CAN_MISS = {"monarchy_name","theocracy_name","republic_name","native_name","tribal_name","europe","asia","africa","north_america","south_america","oceania","new_world"}
 	for language in LANGUAGES:
 		l_language_yml = "_l_" + language + ".yml"
@@ -1370,35 +1378,28 @@ def check_localisation(CONTINENT_NAME_SET,PROVINCE_SET,AREA_SET):
 								if value.count('"') < 2:
 									print(f'There is only one " behind the : in the line ({line.strip()}) in file {os.path.join(root, file)}')
 									continue
-								if key.strip() in language_dictionary and key.strip() != "":
+								if key.strip() in language_dictionary:
 									language_dictionary[key.strip()] += 1
+									value = value.split('"',maxsplit=1)[1].rsplit('"',maxsplit=1)[0]
+									if not value:
+										print(f"The localisation is empty in the line ({line.strip()}) in file {os.path.join(root, file)}.")
+									if key.__contains__(";"):
+										print(f'Victoria 2 separates localisation with ";" so this character can not be used in the line ({line.strip()}) in file {os.path.join(root, file)}.')
+									elif value.__contains__(";"):
+										print(f'Victoria 2 separates localisation with ";" so this character can not be used in the line ({line.strip()}) in file {os.path.join(root, file)}.')
+									if value.__contains__("§"):
+										print(f'Victoria 2 may allow this, but my script wont check "§" colors yet, in the line ({line.strip()}) in file {os.path.join(root, file)}.')
+									if "$" in value or "[" in value or "]" in value or "£" in value or "\\" in value:
+										print(f"The special meaning of some characters may not be preserved in Victoria 2 in the line ({line.strip()}) in file {os.path.join(root, file)}.")
+									# TODO find out if there are more EU4 specific localisation functions.
 		for key in language_dictionary:
 			if language_dictionary[key] != 1:
 				if language_dictionary[key] == 0 and (key not in THESE_KEYS_CAN_MISS or language not in {"english","french","german","polish","spanish"}):
 					print(f"The language {language} has no localisation for {key} in the localisation folder.")
 				elif language_dictionary[key] > 1:
 					print(f"The language {language} has {language_dictionary[key]} localisations for {key} in the localisation folder.")
-	if LOCALISATION_FILES:
-		for files in LOCALISATION_FILES:
-			with open(files,'r',encoding="utf-8-sig",errors='replace') as file:
-				for line in file:
-					line = line.split('#',maxsplit=1)[0]
-					if line.__contains__("�"):
-						print(f"A character with wrong encoding was found in line {line} in file {files}")
-					if line.__contains__(':'):
-						[key,value] = line.split(':',maxsplit=1)
-						if value.count('"') == 2:
-							value = value.split('"')[1]
-						elif value.__contains__('"'):
-							print(f'The value behind the : in line {line} contains either one " or more than 2.')
-							continue
-						if key.strip() in localisation_dictionary and key.strip() != "":
-							localisation_dictionary[key.strip()] += 1
-		for key in localisation_dictionary:
-			if localisation_dictionary[key] != 1:
-				print(f"There are either no or multiple localisations for {key} in the entered files")
-	elif not LANGUAGES:
-		print(f"No localisation files were entered, so no checks were made.")
+	if not LANGUAGES:
+		print(f"No languages were entered, so no checks were made.")
 	return
 
 def check_rivers():
