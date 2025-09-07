@@ -1,5 +1,5 @@
 #%%
-# Place this Python script into whatever mod folder you want to check. The mod needs to have the common/countries, common/country_tags, common/cultures, common/religions, common/governments, history/countries and history/provinces folders and map/area.txt, map/climate.txt, map/continent.txt, map/definition.csv and map/default.map files as well as the provinces.bmp, rivers.bmp and terrain.bmp. If those are not present, either because the mod uses the base game files or relies on another mod you have to copy them or can't use this script. If there are any DS_Store files they need to be removed.
+# Place this Python script into whatever mod folder you want to check. The mod needs to have the common\countries, common\country_tags, common\cultures, common\religions, common\governments, history\countries and history\provinces folders and map\area.txt, map\climate.txt, map\continent.txt, map\definition.csv and map\default.map files as well as the provinces.bmp, rivers.bmp and terrain.bmp. If those are not present, either because the mod uses the base game files or relies on another mod you have to copy them or can't use this script. If there are any DS_Store files they need to be removed.
 from PIL import Image
 import re
 import os
@@ -117,17 +117,18 @@ def remove_text_between_brackets(text,sub_string,path):
 # creates a set of all cultures and a dictionary {culture_group:{culture:{male_names:" ",female_names:" ",dynasty_names:" "}}}
 def get_cultures():
 	culture_dictionary = dict()
-	for root, dirs, files in os.walk("common/cultures/"):
+	for root, dirs, files in os.walk("common\\cultures\\"):
 		for file in files:
-			text = format_text_in_path(os.path.join(root, file))
+			path = os.path.join(root, file)
+			text = format_text_in_path(path)
 			if text == "  ":
-				print(f"The file common/cultures/{file} is either empty or has only comments in it, why not remove it?")
+				print(f"The file {path} is either empty or has only comments in it, why not remove it?")
 				continue
 			male_names_count = text.count(" male_names = {")
 			female_names_count = text.count(" female_names = {")
 			dynasty_names_count = text.count(" dynasty_names = {")
-			text = remove_text_between_brackets(text," country = {","common/cultures/" + file)
-			text = remove_text_between_brackets(text," province = {","common/cultures/" + file)
+			text = remove_text_between_brackets(text," country = {",path)
+			text = remove_text_between_brackets(text," province = {",path)
 			if male_names_count != text.count(" male_names = {"):
 				print('Some male_names list was between " country = {" or " province = {" and the closing bracket "}" and was therefore removed')
 			if female_names_count != text.count(" female_names = {"):
@@ -139,21 +140,21 @@ def get_cultures():
 			culture = ""
 			while text.__contains__(" = {"):
 				if text.startswith(" = {"):
-					print(f'Correct the brackets in common/cultures/{file}. The file ended up starting with " = {{" while being evaluated: {text[:99]}')
+					print(f'Correct the brackets in {path}. The file ended up starting with " = {{" while being evaluated: {text[:99]}')
 					return [dict(),set()]
 				[prior_text,leftover] = text.split(" = {",maxsplit=1)
 				counter = 1 + counter + prior_text.count("{") - prior_text.count("}") # TODO let it count per character to see if the counter ever gets completely wrong
 				new_entry = prior_text.rsplit(" ",maxsplit=1)[1]
 				if counter < 1 or counter > 3:
-					print(f"Correct the brackets in common/cultures/{file}")
+					print(f"Correct the brackets in {path}")
 					return [dict(),set()]
 				elif counter == 1:
 					if new_entry == "male_names" or new_entry == "female_names" or new_entry == "dynasty_names":
-						print(f'Culture groups can not be called "male_names", "female_names" or "dynasty_names" or the brackets in common/cultures/{file} are wrong.')
+						print(f'Culture groups can not be called "male_names", "female_names" or "dynasty_names" or the brackets in {path} are wrong.')
 						return [dict(),set()]
 					culture_group = new_entry
 					if culture_group in culture_dictionary:
-						print(f"{culture_group} found a second time in common/cultures/{file}")
+						print(f"{culture_group} found a second time in {path}")
 					else:
 						culture_dictionary[culture_group] = dict()
 						culture_dictionary[culture_group]["standard_names"] = dict()
@@ -163,16 +164,16 @@ def get_cultures():
 							print(f"{new_entry} was already added as standard name list for {culture_group}, but got added again, which replaces the names added before.")
 						[name_string,leftover] = leftover.split("}",maxsplit=1)
 						if name_string.__contains__("{"):
-							print(f'In the culture group {culture_group} for the standard names between "{new_entry} =" and the opening and closing bracket was another opening bracket in common/cultures/{file}')
+							print(f'In the culture group {culture_group} for the standard names between "{new_entry} =" and the opening and closing bracket was another opening bracket in {path}')
 							return [dict(),set()]
 						counter -= 1
 						name_list = []
 						name_tuple = ()
 						if name_string == " ":
-							print(f"There are no {new_entry} for the standard names in {culture_group} in common/cultures/{file}")
+							print(f"There are no {new_entry} for the standard names in {culture_group} in {path}")
 							name_string = ""
 						elif name_string.count('"')%2 != 0:
-							print(f'Uneven number of " found for standard names {new_entry} in culture group {culture_group} in common/cultures/{file}')
+							print(f'Uneven number of " found for standard names {new_entry} in culture group {culture_group} in {path}')
 							return [dict(),set()]
 						elif name_string.count('"') == 0:
 							name_list = name_string.split()
@@ -194,27 +195,27 @@ def get_cultures():
 							culture_dictionary[culture_group]["standard_names"][new_entry] = " "
 					else:
 						if new_entry in culture_dictionary[culture_group]:
-							print(f"{new_entry} was already added as culture for {culture_group}, but got added again in common/cultures/{file}, which removes male, female and dynasty_names if they were added before.")
+							print(f"{new_entry} was already added as culture for {culture_group}, but got added again in {path}, which removes male, female and dynasty_names if they were added before.")
 						culture = new_entry
 						culture_dictionary[culture_group][culture] = dict()
 				elif counter == 3:
 					if new_entry != "male_names" and new_entry != "female_names" and new_entry != "dynasty_names":
-						print(f"{new_entry} is neither male_names nor female_names nor dynasty_names so it can't be added as name list for the culture {culture} in culture group {culture_group}, check the brackets in common/cultures/{file}")
+						print(f"{new_entry} is neither male_names nor female_names nor dynasty_names so it can't be added as name list for the culture {culture} in culture group {culture_group}, check the brackets in {path}")
 						return [dict(),set()]
 					if new_entry in culture_dictionary[culture_group][culture]:
 						print(f"{new_entry} were already added for culture {culture} in culture group {culture_group}, but got added again, which removes the {new_entry} added before.")
 					[name_string,leftover] = leftover.split("}",maxsplit=1)
 					if name_string.__contains__("{"):
-						print(f'In the culture group {culture_group} for the culture {culture} between "{new_entry} =" and the opening and closing bracket was another opening bracket in common/cultures/{file}')
+						print(f'In the culture group {culture_group} for the culture {culture} between "{new_entry} =" and the opening and closing bracket was another opening bracket in {path}')
 						return [dict(),set()]
 					counter -= 1
 					name_list = []
 					name_tuple = ()
 					if name_string == " ":
-						print(f"There are no {new_entry} for the culture {culture} in {culture_group} in common/cultures/{file}")
+						print(f"There are no {new_entry} for the culture {culture} in {culture_group} in {path}")
 						name_string = ""
 					elif name_string.count('"')%2 != 0:
-						print(f'Uneven number of " found for {new_entry} in culture {culture} in culture group {culture_group} in common/cultures/{file}')
+						print(f'Uneven number of " found for {new_entry} in culture {culture} in culture group {culture_group} in {path}')
 						return [dict(),set()]
 					elif name_string.count('"') == 0:
 						name_list = name_string.split()
@@ -254,25 +255,26 @@ def get_cultures():
 					print(f"Culture {culture} in culture group {culture_group} has neither a dynasty names list nor does the culture group have a default dynasty names list.")
 	return culture_set
 
-# Creates a set and a dictionary of the religions from all files in the common/religions folder.
+# Creates a set and a dictionary of the religions from all files in the common\religions folder.
 def get_religions():
 	religion_dictionary = dict()
 	religion_set = set()
 	COLOR_STRUCTURE = re.compile(r'(?=( color = \{ [0-1]{0,1}["."]{0,1}[0-9]{1,3} [0-1]{0,1}["."]{0,1}[0-9]{1,3} [0-1]{0,1}["."]{0,1}[0-9]{1,3} \} ))')
 	ICON_STRUCTURE = re.compile(r'(?=( icon = [0-9]{1,3} ))')
-	for root, dirs, files in os.walk("common/religions/"):
+	for root, dirs, files in os.walk("common\\religions\\"):
 		for file in files:
-			text = format_text_in_path(os.path.join(root, file))
+			path = os.path.join(root, file)
+			text = format_text_in_path(path)
 			if text == "  ":
-				print(f"The file common/religions/{file} is either empty or has only comments in it, why not remove it?")
+				print(f"The file {path} is either empty or has only comments in it, why not remove it?")
 				continue
 			colors = re.findall(COLOR_STRUCTURE,text)
 			icons = re.findall(ICON_STRUCTURE,text)
 			if len(colors) != len(icons):
-				print('A different number of "icon = ?" and " color = { ? ? ? }" strings has been found in ' + f"common/religions/{file}, specifically the icons:\n{icons}\nand colors:\n{colors}")
+				print('A different number of "icon = ?" and " color = { ? ? ? }" strings has been found in ' + f"{path}, specifically the icons:\n{icons}\nand colors:\n{colors}")
 				return [dict(),set()]
 			if text.find("{") < 5:
-				print(f"common/religions/{file} should start with a religious group, but the first bracket comes too soon.")
+				print(f"{path} should start with a religious group, but the first bracket comes too soon.")
 				return [dict(),set()]
 			last_closing_bracket = -1
 			counter = 0
@@ -286,12 +288,12 @@ def get_religions():
 					if text[k] == "{":
 						if counter == 0:
 							if ( k - last_closing_bracket ) < 6:
-								print(f"When not inside brackets the first thing afterwards should be a religious group, but the first opening bracket in common/religions/{file} comes too soon.")
+								print(f"When not inside brackets the first thing afterwards should be a religious group, but the first opening bracket in {path} comes too soon.")
 								return [dict(),set()]
 							if text[k-3:k] == " = ":
 								religion_group = text[:k-3].rsplit(" ",maxsplit=1)[1]
 								if religion_group in religion_dictionary:
-									print(f"Duplicate religious group {religion_group} found in common/religions/{file}")
+									print(f"Duplicate religious group {religion_group} found in {path}")
 								else:
 									religion_dictionary[religion_group] = dict()
 						elif counter == 1:
@@ -308,7 +310,7 @@ def get_religions():
 						elif counter == 1:
 							religion = ""
 						elif counter < 0:
-							print(f"Brackets are wrong in common/religions/{file} specifically around {text[max(k-20,0):min(k+20,len(text))]}")
+							print(f"Brackets are wrong in {path} specifically around {text[max(k-20,0):min(k+20,len(text))]}")
 				for k in range(mindex + 7,maxdex):
 					if text[k] == "{":
 						counter += 1
@@ -318,7 +320,7 @@ def get_religions():
 							print(f"The religion {religion} lacks a color or an icon.")
 							return [dict(),set()]
 				if religion in religion_dictionary[religion_group]:
-					print(f"Duplicate religion {religion} in religious group {religion_group} in common/religions/{file}")
+					print(f"Duplicate religion {religion} in religious group {religion_group} in {path}")
 				else:
 					icon = icons[i].split(" ")[3]
 					color = tuple(colors[i].split(" ")[4:7])
@@ -333,43 +335,44 @@ def get_religions():
 			for k in range(len(text)):
 				if text[k] == "{":
 					if counter == 0:
-						print(f"After the last icon and color another opening bracket exists in common/religions/{file}")
+						print(f"After the last icon and color another opening bracket exists in {path}")
 					counter += 1
 				elif text[k] == "}":
 					counter -= 1
 					if counter < 0:
-						print(f"Brackets are wrong in common/religions/{file} specifically around {text[max(k-20,0):min(k+20,len(text))]}")
+						print(f"Brackets are wrong in {path} specifically around {text[max(k-20,0):min(k+20,len(text))]}")
 			if counter != 0:
-				print(f"Brackets are wrong and don't close properly at the end in common/religions/{file}.")
+				print(f"Brackets are wrong and don't close properly at the end in {path}.")
 	return religion_set
 
 def get_governments():
 	government_set = set()
-	for root, dirs, files in os.walk("common/governments/"):
+	for root, dirs, files in os.walk("common\\governments\\"):
 		for file in files:
-			text = format_text_in_path(os.path.join(root, file))
+			path = os.path.join(root, file)
+			text = format_text_in_path(path)
 			if text == "  ":
-				print(f"The file common/governments/{file} is either empty or has only comments in it, why not remove it?")
+				print(f"The file {path} is either empty or has only comments in it, why not remove it?")
 				continue
 			while text.__contains__(" = {"):
 				if text.startswith(" = {"):
-					print(f'common/governments/{file} ended up starting with " = {{" while being evaluated: {text[:99]}')
+					print(f'{path} ended up starting with " = {{" while being evaluated: {text[:99]}')
 					return set()
 				next_government = text.split(" = {",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1]
-				text = remove_text_between_brackets(text," " + next_government + " = {","common/governments/" + file)
+				text = remove_text_between_brackets(text," " + next_government + " = {",path)
 				if next_government != "pre_dharma_mapping":
 					government_set.add(next_government)
 			if text != "  ":
-				print(f"After evaluating common/governments/{file} there should be nothing left, but this is: {text[:99]}")
+				print(f"After evaluating {path} there should be nothing left, but this is: {text[:99]}")
 				return set()
 	return government_set
 
 def get_tech_groups():
 	tech_group_set = set()
-	if os.path.exists("common/technology.txt"):
-		text = format_text_in_path("common/technology.txt")
+	if os.path.exists("common\\technology.txt"):
+		text = format_text_in_path("common\\technology.txt")
 		if text.count(" groups = {") != 1:
-			print(f'There was more than one " groups = {{" string in the common/technology.txt file.')
+			print(f'There was more than one " groups = {{" string in the common\\technology.txt file.')
 			return set()
 		counter = 1
 		text = text.split(" groups = {",maxsplit=1)[1]
@@ -378,7 +381,7 @@ def get_tech_groups():
 				counter += 1
 				if counter == 2:
 					if text[:i].rsplit(" =",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1] in tech_group_set:
-						print(f"The technology group {text[:i].rsplit(" =",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1]} occurs twice in common/technology.txt.")
+						print(f"The technology group {text[:i].rsplit(" =",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1]} occurs twice in common\\technology.txt.")
 					else:
 						tech_group_set.add(text[:i].rsplit(" =",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1])
 			elif text[i] == "}":
@@ -517,17 +520,17 @@ def get_sorted_dates(text,path):
 	sorted_list.insert(0,"BASE_DATE")
 	return sorted_list
 
-# Checks country files in history/countries, their paths in common/country_tags and the files in common/countries.
+# Checks country files in history\countries, their paths in common\country_tags and the files in common\countries.
 def check_country_files():
 	tag_dictionary = dict()
 	path_dictionary = dict()
 	capital_dictionary = dict()
-	for root, dirs, files in os.walk("history/countries/"):
+	for root, dirs, files in os.walk("history\\countries\\"):
 		for file in files:
 			tag = file[:3]
 			if re.fullmatch('[0-9A-Z]{3}',tag):
 				if tag in tag_dictionary:
-					print(f"Duplicate tag found in history/countries: {tag}")
+					print(f"Duplicate tag found in history\\countries: {tag}")
 				else:
 					tag_dictionary[tag] = "No path"
 					if tag == "REB" or tag == "NAT" or tag == "PIR":
@@ -571,15 +574,15 @@ def check_country_files():
 						uniques[index][1] = date_text.split(uniques[index][0],maxsplit=1)[1].split(" ",maxsplit=1)[0]
 						if index == 0:
 							if uniques[index][1] not in GOVERNMENT_SET:
-								print(f"Government {uniques[index][1]} in {path} was not found in the common/governments files")
+								print(f"Government {uniques[index][1]} in {path} was not found in the common\\governments files")
 								uniques[index][1] = ""
 						elif index == 1:
 							if uniques[index][1] not in CULTURE_SET:
-								print(f"Culture {uniques[index][1]} in {path} was not found in the common/cultures files")
+								print(f"Culture {uniques[index][1]} in {path} was not found in the common\\cultures files")
 								uniques[index][1] = ""
 						elif index == 2:
 							if uniques[index][1] not in RELIGION_SET:
-								print(f"Religion {uniques[index][1]} in {path} was not found in the common/religions files")
+								print(f"Religion {uniques[index][1]} in {path} was not found in the common\\religions files")
 								uniques[index][1] = ""
 						elif index == 3:
 							if re.fullmatch("[0-9]+",uniques[index][1]):
@@ -588,7 +591,7 @@ def check_country_files():
 								print(f"The capital {uniques[index][1]} in {path} is not a number.")
 						elif index == 3:
 							if uniques[index][1] not in TECH_GROUP_SET:
-								print(f"Technology group {uniques[index][1]} in {path} was not found in the common/religions files")
+								print(f"Technology group {uniques[index][1]} in {path} was not found in the common\\religions files")
 								uniques[index][1] = ""
 				added_accepted_culture_list = []
 				removed_accepted_culture_list = []
@@ -631,46 +634,48 @@ def check_country_files():
 							added_accepted_culture_list.remove(culture)
 					else:
 						print(f"Invalid remove_accepted_culture = {culture} found for {date} in {path}")
-	for root, dirs, files in os.walk("common/country_tags/"):
+	for root, dirs, files in os.walk("common\\country_tags\\"):
 		for file in files:
-			text = format_text_in_path(os.path.join(root, file))
+			path = os.path.join(root, file)
+			text = format_text_in_path(path)
 			if text == "  ":
-				print(f"The file common/country_tags/{file} is either empty or has only comments in it, why not remove it?")
+				print(f"The file {path} is either empty or has only comments in it, why not remove it?")
 				continue
 			for tag in tag_dictionary.keys():
 				while text.__contains__(tag + ' = "countries/'):
 					if tag_dictionary[tag] != "No path":
-						print(f'{tag} = "countries/ is at least twice in the files in the common/country_tags folder')
+						print(f'{tag} = "countries/ is at least twice in the files in the common\\country_tags folder')
 					[first,second] = text.split(tag + ' = "countries/',maxsplit=1)
 					[country_path,second] = second.split('"',maxsplit=1)
 					if country_path not in path_dictionary:
 						tag_dictionary[tag] = country_path
 						path_dictionary[country_path] = tag
 					else:
-						print(f"In common/country_tags a path is used twice: {country_path}")
+						print(f"In common\\country_tags a path is used twice: {country_path}")
 					text = first + second
 			if "" != text.strip():
-				print(f"There is no tag in history/countries for some paths in {os.path.join(root, file)} specifically the following are left: {text.strip()}")
+				print(f"There is no tag in history\\countries for some paths in {path} specifically the following are left: {text.strip()}")
 	if "No path" in tag_dictionary.values():
 		tags_without_path = []
 		for tag in tag_dictionary:
 			if tag_dictionary[tag] == "No path":
 				tags_without_path.append(tag)
-		print(f"No path has been set in common/country_tags for these tags from history/countries: {tags_without_path}")
+		print(f"No path has been set in common\\country_tags for these tags from history\\countries: {tags_without_path}")
 	COLOR_STRUCTURE = re.compile(r'(?=( color = \{ [0-9]{1,3} [0-9]{1,3} [0-9]{1,3} \} ))')
-	for root, dirs, files in os.walk("common/countries/"):
+	for root, dirs, files in os.walk("common\\countries\\"):
 		for file in files:
 			if file not in path_dictionary:
-				print(f"{file} in common/countries is not used as path in common/country_tags by any of the tags in history/countries or some other error occured")
-			text = format_text_in_path(os.path.join(root, file))
+				print(f"{file} in common\\countries is not used as path in common\\country_tags by any of the tags in history\\countries or some other error occured")
+			path = os.path.join(root, file)
+			text = format_text_in_path(path)
 			colors = re.findall(COLOR_STRUCTURE,text)
 			if len(colors) != 1:
-				print(f"The country in common/countries/{file} has either no color or multiple.")
+				print(f"The country in {path} has either no color or multiple.")
 			if text.count(" graphical_culture =") != 1:
-				print(f"The country in common/countries/{file} has either no graphical culture or multiple.")
+				print(f"The country in {path} has either no graphical culture or multiple.")
 	missing_paths = []
 	for path in tag_dictionary.values():
-		if path != "No path" and not os.path.exists("common/countries/" + path):
+		if path != "No path" and not os.path.exists("common\\countries\\" + path):
 			missing_paths.append(path)
 	if missing_paths:
 		print(f"These paths have not been found: {missing_paths}")
@@ -678,7 +683,7 @@ def check_country_files():
 	return [tag_set,capital_dictionary]
 
 def check_terrain():
-	text = format_text_in_path("map/terrain.txt")
+	text = format_text_in_path("map\\terrain.txt")
 	terrain = text.split("categories = {",maxsplit=1)[1]
 	counter = 1
 	for index in range(len(terrain)):
@@ -692,9 +697,9 @@ def check_terrain():
 	if terrain.__contains__(" pti = { type = pti } "):
 		terrain = " ".join(terrain.split(" pti = { type = pti } ",maxsplit=1))
 		if terrain.__contains__("pti = { type = pti }"):
-			print('The "pti = {{ type = pti }}" part was found at least twice in map/terrain.txt.')
+			print('The "pti = {{ type = pti }}" part was found at least twice in map\\terrain.txt.')
 	else:
-		print(f'The " pti = {{ type = pti }} " part was not found in map/terrain.txt.')
+		print(f'The " pti = {{ type = pti }} " part was not found in map\\terrain.txt.')
 	terrain_list = terrain.split(" = {")
 	province_terrain_dictionary = dict()
 	terrain_override_provinces = set()
@@ -724,12 +729,12 @@ def check_terrain():
 def check_province_files():
 	province_set = set()
 	empty_province_files_set = set()
-	for root, dirs, files in os.walk("history/provinces/"):
+	for root, dirs, files in os.walk("history\\provinces\\"):
 		for file in files:
-			if not re.fullmatch("[1-9]",file[0]):
-				print(f"Province file name does not start with a number from 1 to 9 in history/provinces/{file}")
-				continue
 			path = os.path.join(root, file)
+			if not re.fullmatch("[1-9]",file[0]):
+				print(f"Province file name does not start with a number from 1 to 9 in {path}")
+				continue
 			province_ID = ""
 			while re.fullmatch("[0-9]",file[0]):
 				province_ID += file[0]
@@ -737,7 +742,7 @@ def check_province_files():
 			if int(province_ID) not in province_set:
 				province_set.add(int(province_ID))
 			else:
-				print(f'At least 2 files have the same province ID "{province_ID}" in history/provinces.')
+				print(f'At least 2 files have the same province ID "{province_ID}" in history\\provinces.')
 			text = format_text_in_path(path)
 			if text == "  ":
 				empty_province_files_set.add(int(province_ID))
@@ -800,18 +805,18 @@ def check_date_entries(text,sorted_list,path):
 						if unique == "no_culture":
 							print(f"culture = no_culture will not generate pops. Found for date {date} in {path}")
 						elif unique not in CULTURE_SET:
-							print(f"Culture {unique} in {path} was not found in the common/cultures files")
+							print(f"Culture {unique} in {path} was not found in the common\\cultures files")
 					elif index == 1:
 						if unique == "no_religion":
 								print(f"religion = no_religion will not generate pops. Found for date {date} in {path}")
 						elif unique not in RELIGION_SET:
-							print(f"Religion {unique} in {path} was not found in the common/religions files")
+							print(f"Religion {unique} in {path} was not found in the common\\religions files")
 					elif index < 4:
 						if unique not in TAG_SET and unique != "---":
 							if index == 2:
-								print(f"Owner {unique} in {path} was not found in the history/countries files")
+								print(f"Owner {unique} in {path} was not found in the history\\countries files")
 							else:
-								print(f"Controller {unique} in {path} was not found in the history/countries files")
+								print(f"Controller {unique} in {path} was not found in the history\\countries files")
 					elif index > 4:
 						if not re.fullmatch("[0-9]+",unique):
 							if index == 5:
@@ -865,7 +870,7 @@ def check_date_entries(text,sorted_list,path):
 	return is_empty
 
 def check_continents(province_set,empty_province_files_set):
-	text = format_text_in_path("map/continent.txt")
+	text = format_text_in_path("map\\continent.txt")
 	continent_list = []
 	continent_name_set = set()
 	while text.__contains__("= {"):
@@ -891,7 +896,7 @@ def check_continents(province_set,empty_province_files_set):
 		combined_continent_set = combined_continent_set.union(continent_list[i][1])
 	if len(continent_list) > 6:
 		print("OpenVic only supports 6 continents in the UI, so while it will work when there are more, there wont be any functional buttons for them in some windows. Until support for this gets added, you will have to combine continents. Of course you can just generate the output and merge the continents there instead or ignore this problem.")
-	text = format_text_in_path("map/default.map")
+	text = format_text_in_path("map\\default.map")
 	ocean = text.split("sea_starts = {",maxsplit=1)[1].split("}",maxsplit=1)[0]
 	ocean = set(map(int,ocean.split()))
 	for entry in ocean:
@@ -925,18 +930,18 @@ def check_continents(province_set,empty_province_files_set):
 					print(f"At least one capital in the history of tag {tag} is not continental or the province simply does not exist: {set(CAPITAL_DICTIONARY[tag]) - combined_continent_set}.")
 	if water_provinces - empty_province_files_set:
 		print(f"These water provinces have some entries in their files: {water_provinces - empty_province_files_set}")
-	image = Image.open("map/provinces.bmp")
+	image = Image.open("map\\provinces.bmp")
 	w,h = image.size
 	load_province_bmp = image.load()
 	pixel_set = set(color for count, color in image.getcolors(65536)) # TODO eventually increase the max color value.
 	if text.count(" max_provinces = ") != 1:
-		print('Either " max_provinces = " does not exist in the map/default.map file or it appears multiple times.')
+		print('Either " max_provinces = " does not exist in the map\\default.map file or it appears multiple times.')
 	else:
 		max_provinces = text.split(" max_provinces = ",maxsplit=1)[1].split(" ",maxsplit=1)[0]
 		if not re.fullmatch("[0-9]+",max_provinces):
-			print(f"In map/default.map max_provinces = {max_provinces} is not an integer value.")
+			print(f"In map\\default.map max_provinces = {max_provinces} is not an integer value.")
 		elif len(pixel_set) >= int(max_provinces):
-			print(f"The max_provinces value {max_provinces} in the map/default.map should be at least 1 higher than the number of different colors in the province.bmp {len(pixel_set)}.")
+			print(f"The max_provinces value {max_provinces} in the map\\default.map should be at least 1 higher than the number of different colors in the province.bmp {len(pixel_set)}.")
 		elif int(max_provinces) >= 65536:
 			print(f"OpenVic does not yet support more than 65536 provinces and this script will mention a lot of false positives, if there are more unique colors in the province.bmp.")
 	[DEFINITIONS_DICTIONARY,RGB_DICTIONARY] = check_definition_csv()
@@ -947,8 +952,8 @@ def check_continents(province_set,empty_province_files_set):
 		for x in range(w):
 			for y in range(h):
 				if load_province_bmp[x,y] not in RGB_DICTIONARY:
-					print(f"The color at {x},{y} in the provinces.bmp is not in the map/definition.csv")
-	terrain = Image.open("map/terrain.bmp").copy()
+					print(f"The color at {x},{y} in the provinces.bmp is not in the map\\definition.csv")
+	terrain = Image.open("map\\terrain.bmp").copy()
 	terrain_w,terrain_h = terrain.size
 	if terrain_w != w or terrain_h != h:
 		print(f"The width and/or height of the provinces.bmp {w},{h} and terrain.bmp {terrain_w},{terrain_h} are not equal, which also means it wont be checked whether some terrain pixels are ocean or not while the province itself is continental or not.")
@@ -983,7 +988,7 @@ def check_continents(province_set,empty_province_files_set):
 								else:
 									load_terrain_image[x,y] = TERRAIN_DICTIONARY["INLAND_OCEAN_INDEX"]
 							wrong_land_terrain.add(RGB_DICTIONARY[load_province_bmp[x,y]])
-			rivers = Image.open("map/rivers.bmp").copy()
+			rivers = Image.open("map\\rivers.bmp").copy()
 			rivers_w,rivers_h = rivers.size
 			if w != rivers_w or h != rivers_h:
 				print(f"The width and/or height of the provinces.bmp and the rivers.bmp are different.")
@@ -997,7 +1002,7 @@ def check_continents(province_set,empty_province_files_set):
 									load_rivers_bmp[x,y] = 254
 								else:
 									load_rivers_bmp[x,y] = 255
-					rivers.save("map/rivers2.bmp")
+					rivers.save("map\\rivers2.bmp")
 				if DONT_IGNORE_ISSUE["COAST_NOT_COASTAL"]:
 					for x in range(w):
 						for y in range(h):
@@ -1012,14 +1017,14 @@ def check_continents(province_set,empty_province_files_set):
 									load_terrain_image[x,y] = TERRAIN_DICTIONARY["COASTAL_INDEX"]
 								elif load_terrain_image[x,y] == TERRAIN_DICTIONARY["COASTAL_INDEX"]:
 									load_terrain_image[x,y] = TERRAIN_DICTIONARY["CONTINENTAL_INDEX"]
-				terrain.save("map/terrain2.bmp")
+				terrain.save("map\\terrain2.bmp")
 			if wrong_water_terrain:
 				print(f"If no map issues are mentioned above this message you can create the terrain.bmp and rivers.bmp files with correct pixels. Some terrain.bmp pixels are water, but their provinces are not ocean or lakes: {wrong_water_terrain}")
 			if wrong_land_terrain:
 				print(f"If no map issues are mentioned above this message you can create the terrain.bmp and rivers.bmp files with correct pixels. Some terrain.bmp pixels are not water, but their provinces are ocean or lakes: {wrong_land_terrain}")
 		else:
 			print("Whether some Terrain pixels are water or not, while the province it belongs to is the other could not be checked due to colors in the provinces.bmp that are not in the definition.csv")
-	text = format_text_in_path("map/climate.txt")
+	text = format_text_in_path("map\\climate.txt")
 	impassable = set()
 	while text.__contains__(" = {"):
 		[climate_name,text] = text.split(" = {",maxsplit=1)
@@ -1052,7 +1057,7 @@ def check_continents(province_set,empty_province_files_set):
 def check_area(combined_continent_set,lakes,impassable):
 	area_province_set = set()
 	area_set = set()
-	text = format_text_in_path("map/area.txt")
+	text = format_text_in_path("map\\area.txt")
 	text_list = text.split(" = {")
 	area_name = text_list[0].strip()
 	text_list.remove(text_list[0])
@@ -1081,22 +1086,22 @@ def check_definition_csv():
 	not_more_than_once = True
 	definitions_dictionary = dict()
 	RGB_dictionary = dict()
-	with open("map/definition.csv",'r',encoding=ENCODING,errors='replace') as file:
+	with open("map\\definition.csv",'r',encoding=ENCODING,errors='replace') as file:
 		for line in file:
 			if re.fullmatch("[1-9]",line[0]):
 				[provinceID,red,green,blue] = line.split(";",maxsplit=4)[0:4]
 				if not re.fullmatch("[0-9]+",provinceID):
-					print(f"The province ID {provinceID} is not a valid number in map/definition.csv")
+					print(f"The province ID {provinceID} is not a valid number in map\\definition.csv")
 				elif provinceID in definitions_dictionary:
-					print(f"At least 2 lines start with the same number {provinceID} in map/definition.csv")
+					print(f"At least 2 lines start with the same number {provinceID} in map\\definition.csv")
 				elif not (re.fullmatch("[0-9]+",red) and re.fullmatch("[0-9]+",green) and re.fullmatch("[0-9]+",blue)):
-					print(f"One of the red, green or blue values is not a number in line {line.strip()} in map/definition.csv")
+					print(f"One of the red, green or blue values is not a number in line {line.strip()} in map\\definition.csv")
 				elif not ((int(red) < 256) and (int(green) < 256) and (int(blue) < 256)):
-					print(f"The red, green and blue values have to be numbers from 0 to 255 in line {line.strip()} in map/definition.csv")
+					print(f"The red, green and blue values have to be numbers from 0 to 255 in line {line.strip()} in map\\definition.csv")
 				else:
 					RGB = tuple((int(red),int(green),int(blue)))
 					if RGB in RGB_dictionary:
-						print(f"Another province was already assigned the same RGB value {RGB} as {provinceID} in map/definition.csv")
+						print(f"Another province was already assigned the same RGB value {RGB} as {provinceID} in map\\definition.csv")
 					else:
 						definitions_dictionary[provinceID] = RGB
 						RGB_dictionary[RGB] = int(provinceID)
@@ -1105,7 +1110,7 @@ def check_definition_csv():
 			elif line[0] == "#":
 				pass
 			else:
-				print(f"In map/definition.csv this line has to change or be removed: {line.strip()}")
+				print(f"In map\\definition.csv this line has to change or be removed: {line.strip()}")
 	return [definitions_dictionary,RGB_dictionary]
 
 def check_positions(OCEAN_SET,LAKES_SET,IMPASSABLE_SET,pixel_set,DEFINITIONS_DICTIONARY):
@@ -1141,21 +1146,21 @@ def check_positions(OCEAN_SET,LAKES_SET,IMPASSABLE_SET,pixel_set,DEFINITIONS_DIC
 		if str(provinceID) in DEFINITIONS_DICTIONARY:
 			OCEAN_RGB_SET.add(DEFINITIONS_DICTIONARY[str(provinceID)])
 		else:
-			print(f"The province ID {provinceID} is not found in the map/definition.csv file, but it is an ocean.")
+			print(f"The province ID {provinceID} is not found in the map\\definition.csv file, but it is an ocean.")
 	UNIMPORTANT_RGB_SET = set()
 	for provinceID in LAKES_SET:
 		if str(provinceID) in DEFINITIONS_DICTIONARY:
 			UNIMPORTANT_RGB_SET.add(DEFINITIONS_DICTIONARY[str(provinceID)])
 		else:
-			print(f"The province ID {provinceID} is not found in the map/definition.csv file, but it is a lake.")
+			print(f"The province ID {provinceID} is not found in the map\\definition.csv file, but it is a lake.")
 	for provinceID in IMPASSABLE_SET:
 		if str(provinceID) in DEFINITIONS_DICTIONARY:
 			UNIMPORTANT_RGB_SET.add(DEFINITIONS_DICTIONARY[str(provinceID)])
 		else:
-			print(f"The province ID {provinceID} is not found in the map/definition.csv file, but it is impassable.")
-	positions = format_text_in_path("map/positions.txt")
-	image_load_original = Image.open("map/provinces.bmp").load()
-	image = Image.open("map/provinces.bmp").copy()
+			print(f"The province ID {provinceID} is not found in the map\\definition.csv file, but it is impassable.")
+	positions = format_text_in_path("map\\positions.txt")
+	image_load_original = Image.open("map\\provinces.bmp").load()
+	image = Image.open("map\\provinces.bmp").copy()
 	w,h = image.size
 	image_load = image.load()
 	for x in range(w):
@@ -1272,7 +1277,7 @@ def check_positions(OCEAN_SET,LAKES_SET,IMPASSABLE_SET,pixel_set,DEFINITIONS_DIC
 			print(f"The port position {port_x},{port_y} for province {provinceID} is outside the provinces.bmp with size {w},{h}.")
 			continue
 		if provinceID not in DEFINITIONS_DICTIONARY:
-			print(f"The province ID {provinceID} is not found in the map/definition.csv file, but a position for it exists.")
+			print(f"The province ID {provinceID} is not found in the map\\definition.csv file, but a position for it exists.")
 			continue
 		if DONT_IGNORE_ISSUE["CITY_POSITION"] and city_x != -1 and city_y != -1:
 			if image_load_original[int(float(city_x)),int(h-1 - float(city_y))] != DEFINITIONS_DICTIONARY[provinceID]:
@@ -1364,7 +1369,7 @@ def check_localisation(CONTINENT_NAME_SET,PROVINCE_SET,AREA_SET):
 	for language in LANGUAGES:
 		l_language_yml = "_l_" + language + ".yml"
 		language_dictionary = localisation_dictionary.copy()
-		for root, dirs, files in os.walk("localisation/"):
+		for root, dirs, files in os.walk("localisation\\"):
 			for file in files:
 				if file.__contains__(l_language_yml):
 					with open(os.path.join(root, file),'r',encoding="utf-8-sig",errors='replace') as loc:
@@ -1403,7 +1408,7 @@ def check_localisation(CONTINENT_NAME_SET,PROVINCE_SET,AREA_SET):
 	return
 
 def check_rivers():
-	image = Image.open("map/rivers.bmp").copy()
+	image = Image.open("map\\rivers.bmp").copy()
 	w,h = image.size
 	load_bmp = image.load()
 	for x in range(w):
@@ -1497,38 +1502,38 @@ def check_rivers():
 	return
 
 def check_gfx():
-	terrain = Image.open("map/terrain.bmp")
+	terrain = Image.open("map\\terrain.bmp")
 	terrain_w,terrain_h = terrain.size
-	if os.path.exists("map/terrain/colormap_spring.dds"):
-		colormap = Image.open("map/terrain/colormap_spring.dds")
+	if os.path.exists("map\\terrain\\colormap_spring.dds"):
+		colormap = Image.open("map\\terrain\\colormap_spring.dds")
 		w,h = colormap.size
 		if terrain_w % w != 0:
 			print(f"The width of the terrain.bmp is not a multiple of the width of the colormap_spring.dds, while not necessary the result will probably look worse than if it was.")
 		if terrain_h % h != 0:
 			print(f"The height of the terrain.bmp is not a multiple of the height of the colormap_spring.dds, while not necessary the result will probably look worse than if it was.")
 	else:
-		print(f"There is no map/terrain/colormap_spring.dds image.")
-	if os.path.exists("map/terrain/colormap_water.dds"):
-		colormap = Image.open("map/terrain/colormap_water.dds")
+		print(f"There is no map\\terrain\\colormap_spring.dds image.")
+	if os.path.exists("map\\terrain\\colormap_water.dds"):
+		colormap = Image.open("map\\terrain\\colormap_water.dds")
 		w,h = colormap.size
 		if terrain_w % w != 0:
 			print(f"The width of the terrain.bmp is not a multiple of the width of the colormap_water.dds, while not necessary the result will probably look worse than if it was.")
 		if terrain_h % h != 0:
 			print(f"The height of the terrain.bmp is not a multiple of the height of the colormap_water.dds, while not necessary the result will probably look worse than if it was.")
 	else:
-		print(f"There is no map/terrain/colormap_water.dds image.")
-	if os.path.exists("gfx/interface/icon_religion_small.dds"):
-		religion_dds = Image.open("gfx/interface/icon_religion_small.dds")
+		print(f"There is no map\\terrain\\colormap_water.dds image.")
+	if os.path.exists("gfx\\interface\\icon_religion_small.dds"):
+		religion_dds = Image.open("gfx\\interface\\icon_religion_small.dds")
 		w,h = religion_dds.size
 		if h != 32:
 			print(f"The height of the icon_religion_small.dds is not 32.")
 		if w % h != 0:
 			print(f"The width of the icon_religion_small.dds is not a multiple of the height.")
 	else:
-		print(f"There is no icon_religion_small.dds in gfx/interface/.")
+		print(f"There is no icon_religion_small.dds in gfx\\interface\\.")
 	for tag in TAG_SET - {"REB","NAT","PIR"}:
-		if os.path.exists("gfx/flags/" + tag + ".tga"):
-			w,h = Image.open("gfx/flags/" + tag + ".tga").size
+		if os.path.exists("gfx\\flags\\" + tag + ".tga"):
+			w,h = Image.open("gfx\\flags\\" + tag + ".tga").size
 			if not 128 == w == h:
 				print(f"The flag {tag}.tga does not have the size 128 x 128.")
 		elif DONT_IGNORE_ISSUE["MISSING_FLAGS"]:
@@ -1549,9 +1554,9 @@ def check_gfx():
 				elif terrain in PROVINCE_TERRAIN_DICTIONARY:
 					print(f"The terrain {terrain} has at least 2 terrain pictures, one at {os.path.join(root, file)}")
 				else:
-					print(f"The terrain {terrain} is not in map/terrain.txt, but there is a picture for it.")
+					print(f"The terrain {terrain} is not in map\\terrain.txt, but there is a picture for it.")
 	if terrain_set:
-		print(f"Some terrain does not have a picture in the gfx/interface folder, specifically: {terrain_set}")
+		print(f"Some terrain does not have a picture in the gfx\\interface folder, specifically: {terrain_set}")
 	return
 
 if not I_READ_THE_INSTRUCTIONS:
@@ -1571,11 +1576,11 @@ else:
 		check_gfx()
 	else:
 		if not CULTURE_SET:
-			print(f"No cultures could be found in the common/cultures folder.")
+			print(f"No cultures could be found in the common\\cultures folder.")
 		if not RELIGION_SET:
-			print(f"No religions could be found in the common/religions folder.")
+			print(f"No religions could be found in the common\\religions folder.")
 		if not GOVERNMENT_SET:
-			print(f"No governments could be found in the common/governments folder.")
-		if not TECH_GROUP_SET and os.path.exists("common/technology.txt"):
-			print(f"No technology groups could be found in common/technology.txt.")
+			print(f"No governments could be found in the common\\governments folder.")
+		if not TECH_GROUP_SET and os.path.exists("common\\technology.txt"):
+			print(f"No technology groups could be found in common\\technology.txt.")
 #%%
