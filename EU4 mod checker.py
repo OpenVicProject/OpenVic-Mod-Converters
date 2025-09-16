@@ -11,9 +11,11 @@ TERRAIN_DICTIONARY = {
 	"OCEAN_INDEX": 15, # Replace this number, if the mod changes the default EU4 index values for the ocean and inland ocean, which can be found in the map/terrain.txt by looking at the type = ocean/inland_ocean { color = { ?? } } at the end of the file or map/terrain.bmp for example by using GIMP and selecting an ocean/inland_ocean pixel with the color picker which will show the index.
 	"INLAND_OCEAN_INDEX": 17, # Same as with OCEAN_INDEX.
 	"CONTINENTAL_INDEX": 0, # This and COASTAL_INDEX will only be used to automatically create a new terrain.bmp, if you enable the option below. Specifically any pixel belonging to a continental province that is currently an ocean pixel will be changed to CONTINENTAL_INDEX.
-	"COASTAL_INDEX": 35, # Any coastal pixel that is not actually coastal will be replaced by STANDARD_CONTINENTAL.
+	"COASTAL_INDEX": 35, # Any coastal pixel that is not actually coastal will be replaced by CONTINENTAL_INDEX.
 	"FORCE_INLAND_OCEAN": ["inland_ocean"] # You can simply make the brackets empty [] if you don't want the following to happen: Any province in the terrain_override part for the terrains in this list will be turned into inland ocean terrain in the terrain.bmp and rivers.bmp, just like any current inland ocean province not in this list will have it's terrain turned into regular ocean terrain, if you set "INCORRECT_TERRAIN" = True. For example Elder Scrolls Universalis has impassable river provinces, which use "impassable_mountains" terrain as identifier, as i currently intend to turn these rivers into impassable ocean provinces in Victoria 2/OpenVic.
 }
+ATLAS_PATH = "map\\terrain\\atlas0.dds" # The textures for the terrain map seem to be always here, but just to be sure i may as well make it easy to change the path.
+ATLAS_SIZE = (4,4) # Change this to the number of different squares in the map\terrain\atlas0 file, however (8,8) is the maximum and (2,2) the minimum. First number is from left to right, second is up down, although they are most likely the same.
 DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output files, so you can choose to ignore them, though in some cases you really should check them.
 	"INDIVIDUAL_PIXELS":False, # Some provinces will be assigned to a continent, while some of their pixels in the terrain.bmp are for oceans/in the TERRAIN_DICTIONARY, while other provinces are assigned as ocean or lake in the default.map file, but have pixels that are not according to the TERRAIN_DICTIONARY. The province IDs with such wrong pixels will be shown regardless of whether this option is False or True, but setting this option to True will also show all individual wrong pixels, which can easily cause tens of thousands of lines mentioning wrong pixels.
 	"DATES_AFTER_START_DATE":True, # If you only care about mistakes that happen until the START_DATE, set this to False.
@@ -36,10 +38,12 @@ DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output file
 	"CITY_POSITION":False, # The position of the city could be outside of the province, though this currently does not matter for conversion to a Victoria 2 mod.
 	"UNIT_POSITION":False, # The position of units could be outside of the province, though this currently does not matter for conversion to a Victoria 2 mod.
 	"NAME_POSITION":False, # The position of the name could be outside of the province, though this currently does not matter for conversion to a Victoria 2 mod.
+	"MISSING_TERRAIN_MODIFIER": True, # If True you will get a message for every terrain that has no supply_limit, movement_cost, combat_width or defence in map\terrain.txt, the default for the mod converter will be 1 for movement_cost and the movement_cost will also have a minimal value of 1 and 0 for supply_limit, combat_width and defence and combat_width will have a minimum of -0.8 as well.
 	"NO_TERRAIN_OVERRIDE": False, # If set to True you get a list of all continental provinces that are not used in any terrain_override, which is not necessary, just something you may want to do.
-	"INCORRECT_TERRAIN": False, # ONLY CHANGE THIS TO TRUE IF THERE ARE NO MORE ERRORS RELATED TO THE MAP! In EU4 it does not matter if the terrain.bmp matches the province being continental or an ocean, however in V2 this is important, so you can choose to automatically generate both the terrain.bmp and rivers.bmp to match this. The new ones will be saved as terrain2.bmp and rivers2.bmp and the generation process for the terrain.bmp is to copy any correct pixel, while incorrect ones will be swapped to ocean or inland_ocean for lakes or the CONTINENTAL_INDEX for continental provinces. If you do not see an error message containing: "If no map issues are mentioned above this message you can create the terrain.bmp and rivers.bmp files with correct pixels." leave this option as False as it either means there are important errors that need to be fixed first or very unlikely, everything is already correct.
+	"INCORRECT_TERRAIN": False, # ONLY CHANGE THIS TO TRUE IF THERE ARE NO MORE ERRORS RELATED TO THE MAP! In EU4 it does not matter if the terrain.bmp matches the province being continental or an ocean, however in V2 this is important, so you can choose to automatically generate both the terrain.bmp and rivers.bmp to match this. The new ones will be saved as terrain2.bmp and rivers2.bmp and the generation process for the terrain.bmp is to copy any correct pixel, while incorrect ones will be swapped to ocean or inland_ocean for lakes and the FORCE_INLAND_OCEAN terrains or the CONTINENTAL_INDEX for continental provinces. If you do not see an error message containing: "If no map issues are mentioned above this message you can create the terrain.bmp and rivers.bmp files with correct pixels." leave this option as False as it either means there are important errors that need to be fixed first or very unlikely, everything is already correct.
 	"COAST_NOT_COASTAL": False, # If you want every coastal province to have coastal terrain, change this to True. There will be no exceptions, so don't use this if a mod made some terrain not coastal by choice.
-	"MISSING_FLAGS": False #If you want to know which tags that don't have flags set this to True.
+	"WRONG_PICTURE_SIZE": True, # If you don't want to fix wrong picture sizes you can disable the warning, however depending on how wrong the size is the output could look really bad.
+	"MISSING_FLAGS": False # If you want to know which tags that don't have flags set this to True.
 }
 I_READ_THE_INSTRUCTIONS = False # Set this to True after changing all the settings you need to change or want to change and that's it. Now you can run it, if you have a sufficiently new Python version installed. Maybe anything after 3.7 will work, as well as a new enough Pillow version (Python Imaging Library).
 
@@ -112,6 +116,23 @@ def remove_text_between_brackets(text,sub_string,path):
 			return "#"
 		text = prior_text + leftover
 	text = " " + text.strip() + " "
+	return text
+
+# Will return the string between the first occurance starting substring and the closing bracket. Any additional occurances of the same subtring will be ignored.
+def get_text_between_brackets(text,sub_string,path):
+	text = text.split(sub_string,maxsplit=1)[1]
+	counter = 1
+	for index in range(len(text)):
+		if text[index] == "{":
+			counter += 1
+		elif text[index] == "}":
+			counter -= 1
+			if counter == 0:
+				text = text[:index]
+				break
+	else:
+		print(f"In {path} the brackets are wrong.")
+		return "#"
 	return text
 
 # creates a set of all cultures and a dictionary {culture_group:{culture:{male_names:" ",female_names:" ",dynasty_names:" "}}}
@@ -540,9 +561,8 @@ def check_country_files():
 				continue
 			path = os.path.join(root, file)
 			text = format_text_in_path(path)
-			text = remove_text_between_brackets(text," monarch = {",path)
-			text = remove_text_between_brackets(text," queen = {",path)
-			text = remove_text_between_brackets(text," heir = {",path)
+			for character in [" monarch = {"," queen = {"," heir = {"]:
+				text = remove_text_between_brackets(text,character,path)
 			sorted_list = get_sorted_dates(text,path)
 			uniques = [[" government = ",""],[" primary_culture = ",""],[" religion = ",""],[" capital = ",""],[" technology_group = ",""]]
 			accepted_culture_list = []
@@ -684,16 +704,15 @@ def check_country_files():
 
 def check_terrain():
 	text = format_text_in_path("map\\terrain.txt")
-	terrain = text.split("categories = {",maxsplit=1)[1]
-	counter = 1
-	for index in range(len(terrain)):
-		if terrain[index] == "{":
-			counter += 1
-		elif terrain[index] == "}":
-			counter -= 1
-			if counter == 0:
-				terrain = terrain[:index - 1]
-				break
+	if text.count(" categories = {") != 1:
+		print(f'In map\\terrain.txt are either no or multiple occurances of " categories = {{".')
+		return [dict(),set()]
+	if text.count(" terrain = {") != 1:
+		print(f'In map\\terrain.txt are either no or multiple occurances of " terrain = {{".')
+		return [dict(),set()]
+	terrain = get_text_between_brackets(text," categories = {","map\\terrain.txt")
+	terrain_index = get_text_between_brackets(text," terrain = {","map\\terrain.txt")
+	terrain_index_list = terrain_index.split()
 	if terrain.__contains__(" pti = { type = pti } "):
 		terrain = " ".join(terrain.split(" pti = { type = pti } ",maxsplit=1))
 		if terrain.__contains__("pti = { type = pti }"):
@@ -707,6 +726,7 @@ def check_terrain():
 		current_terrain = terrain_list[0].rsplit(" ",maxsplit=1)[1]
 		province_terrain_dictionary[current_terrain] = dict()
 		terrain_list.remove(terrain_list[0])
+		current_terrain_text_list = []
 		while terrain_list[0].rsplit(" ",maxsplit=1)[1] in {"color","terrain_override"}:
 			if terrain_list[0].rsplit(" ",maxsplit=1)[1] == "color":
 				if "color" in province_terrain_dictionary[current_terrain]:
@@ -721,9 +741,74 @@ def check_terrain():
 					if prov in terrain_override_provinces:
 						print(f"The province {prov} in the terrain override of {current_terrain} is already used in another terrain override.")
 				terrain_override_provinces = terrain_override_provinces.union(additional_override)
+			current_terrain_text_list.append(terrain_list[0].strip())
 			terrain_list.remove(terrain_list[0])
 		if "color" not in province_terrain_dictionary[current_terrain]:
 			print(f"The terrain {current_terrain} has no color.")
+		current_terrain_text = " " + " ".join(current_terrain_text_list) + " "
+		for terrain_modifier in [" supply_limit = "," movement_cost = "," combat_width = "," defence = "]:
+			if current_terrain_text.count(terrain_modifier) == 1:
+				terrain_modifier_value = current_terrain_text.split(terrain_modifier,maxsplit=1)[1].split(" ",maxsplit=1)[0]
+				if terrain_modifier == " supply_limit = ":
+					if not (re.fullmatch("[1-9][0-9]{0,1}",terrain_modifier_value) or re.fullmatch("[1-9][0-9]{0,1}[.][0-9]{0,2}",terrain_modifier_value)):
+						print(f"The{terrain_modifier}{terrain_modifier_value} for the terrain {current_terrain} might be incorrect.")
+				elif terrain_modifier == " movement_cost = ":
+					if not (re.fullmatch("[1-9]",terrain_modifier_value) or re.fullmatch("[0-9][.][0-9]{0,3}",terrain_modifier_value)):
+						print(f"The{terrain_modifier}{terrain_modifier_value} for the terrain {current_terrain} might be incorrect.")
+					elif float(terrain_modifier_value) == 0:
+						print(f"The{terrain_modifier}{terrain_modifier_value} for the terrain {current_terrain} should not be 0.")
+				elif terrain_modifier == " combat_width = ":
+					if not re.fullmatch("[-][0][.][0-9]{0,2}",terrain_modifier_value):
+						print(f"The{terrain_modifier}{terrain_modifier_value} for the terrain {current_terrain} might be incorrect.")
+					elif float(terrain_modifier_value) < -0.8:
+						print(f"The{terrain_modifier}{terrain_modifier_value} for the terrain {current_terrain} is very small.")
+				elif terrain_modifier == " defence = ":
+					if not re.fullmatch("[-]{0,1}[1-6]",terrain_modifier_value):
+						print(f"The{terrain_modifier}{terrain_modifier_value} for the terrain {current_terrain} might be incorrect.")
+			elif current_terrain_text.count(terrain_modifier) > 1:
+				print(f"The terrain {current_terrain} has multiple{terrain_modifier}occurances.")
+			elif DONT_IGNORE_ISSUE["MISSING_TERRAIN_MODIFIER"] and (current_terrain not in ["ocean","inland_ocean"] and current_terrain not in TERRAIN_DICTIONARY["FORCE_INLAND_OCEAN"]):
+				print(f"The terrain {current_terrain} does not have the terrain modifier {terrain_modifier.strip().split()[0]}.")
+	if len(terrain_index_list) % 12 != 0:
+		print(f"There seems to be a mistake in map\\terrain.txt in the terrain = {{ part:")
+		for i in range(0,len(terrain_index_list),12):
+			print(f"{" ".join(terrain_index_list[i:i+12])}")
+	else:
+		index_set = set()
+		terrain_pixel_set = set(color for count, color in Image.open("map\\terrain.bmp").getcolors())
+		for i in range(0,len(terrain_index_list),12):
+			wrong_structure = False
+			if terrain_index_list[i + 1] != "=": wrong_structure = True
+			elif terrain_index_list[i + 2] != "{": wrong_structure = True
+			elif terrain_index_list[i + 3] != "type": wrong_structure = True
+			elif terrain_index_list[i + 4] != "=" : wrong_structure = True
+			elif terrain_index_list[i + 6] != "color": wrong_structure = True
+			elif terrain_index_list[i + 7] != "=" : wrong_structure = True
+			elif terrain_index_list[i + 8] != "{": wrong_structure = True
+			elif terrain_index_list[i + 10] != "}": wrong_structure = True
+			elif terrain_index_list[i + 11] != "}": wrong_structure = True
+			if wrong_structure:
+				print(f"There is an error in map\\terrain.txt in the terrain = {{ part, specifically here: {" ".join(terrain_index_list[i:i+12])}")
+				break
+			if terrain_index_list[i + 5] not in province_terrain_dictionary:
+				print(f"In map\\terrain.txt in the terrain = {{ part a terrain type is not specified in the terrain categories, specifically here: {" ".join(terrain_index_list[i:i+12])}")
+			if terrain_index_list[i + 5] == "ocean":
+				if str(TERRAIN_DICTIONARY["OCEAN_INDEX"]) != terrain_index_list[i + 9]:
+					print(f"The terrain index {terrain_index_list[i + 9]} is type = ocean, but you entered the index: {TERRAIN_DICTIONARY["OCEAN_INDEX"]}")
+			if terrain_index_list[i + 5] == "inland_ocean":
+				if str(TERRAIN_DICTIONARY["INLAND_OCEAN_INDEX"]) != terrain_index_list[i + 9]:
+					print(f"The terrain index {terrain_index_list[i + 9]} is type = inland_ocean, but you entered the index: {TERRAIN_DICTIONARY["INLAND_OCEAN_INDEX"]}")
+			if not re.fullmatch("[0-9]{1,3}",terrain_index_list[i + 9]):
+				print(f"The index {terrain_index_list[i + 9]} for terrain {terrain_index_list[i + 5]} is not a valid integer value")
+			elif int(terrain_index_list[i + 9]) in index_set:
+				print(f"In map\\terrain.txt in the terrain = {{ part, the color index {terrain_index_list[i + 9]} is used twice, specifically here: {" ".join(terrain_index_list[i:i+12])}")
+			elif int(terrain_index_list[i + 9]) in terrain_pixel_set and int(terrain_index_list[i + 9]) >= max(2, min(8, ATLAS_SIZE[0])) * max(2, min(8, ATLAS_SIZE[1])) and terrain_index_list[i + 5] not in ["ocean","inland_ocean"]:
+				print(f'You need to either add {terrain_index_list[i + 9]} to the ATLAS_DICTIONARY in the mod converter with an "atlas_index" value below {max(2, min(8, ATLAS_SIZE[0])) * max(2, min(8, ATLAS_SIZE[1]))} as there is no square for the terrain {terrain_index_list[i + 5]} in the map\\terrain\\atlas0.dds file or change the texturesheet.tga after the conversion.')
+				index_set.add(int(terrain_index_list[i + 9]))
+			else:
+				index_set.add(int(terrain_index_list[i + 9]))
+		if terrain_pixel_set - index_set:
+			print(f"At least one index is in the terrain image, but not in the map\\terrain.txt terrain = {{ part,specifically: {terrain_pixel_set - index_set}.")
 	return [province_terrain_dictionary,terrain_override_provinces]
 
 def check_province_files():
@@ -923,6 +1008,13 @@ def check_continents(province_set,empty_province_files_set):
 			inland_ocean = inland_ocean.union(PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"])
 			water_provinces = water_provinces.union(PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"])
 			combined_continent_set = combined_continent_set.difference(PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"])
+	for terrain in PROVINCE_TERRAIN_DICTIONARY:
+		if "terrain_override" in PROVINCE_TERRAIN_DICTIONARY[terrain]:
+			if terrain in ["ocean","inland_ocean"] or terrain in TERRAIN_DICTIONARY["FORCE_INLAND_OCEAN"]:
+				if PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"] - water_provinces:
+					print(f"Some provinces are neither ocean, lake or forced ocean, but in the override of terrain {terrain}, specifically: {PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"] - water_provinces}")
+			elif PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"] - combined_continent_set:
+				print(f"Some provinces are not continental, but in the override of terrain {terrain}, which is supposed to be continental, specifically: {PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"] - combined_continent_set}")
 	if {capital for capital_list in CAPITAL_DICTIONARY.values() for capital in capital_list}.difference(combined_continent_set):
 		for tag in TAG_SET:
 			if tag in CAPITAL_DICTIONARY:
@@ -1385,7 +1477,7 @@ def check_localisation(CONTINENT_NAME_SET,PROVINCE_SET,AREA_SET):
 									continue
 								if key.strip() in language_dictionary:
 									language_dictionary[key.strip()] += 1
-									value = value.split('"',maxsplit=1)[1].rsplit('"',maxsplit=1)[0]
+									value = value.split('"',maxsplit=1)[1].rsplit('"',maxsplit=1)[0].replace('\\"','"')
 									if not value:
 										print(f"The localisation is empty in the line ({line.strip()}) in file {os.path.join(root, file)}.")
 									if key.__contains__(";"):
@@ -1502,11 +1594,9 @@ def check_rivers():
 	return
 
 def check_gfx():
-	terrain = Image.open("map\\terrain.bmp")
-	terrain_w,terrain_h = terrain.size
+	terrain_w,terrain_h = Image.open("map\\terrain.bmp").size
 	if os.path.exists("map\\terrain\\colormap_spring.dds"):
-		colormap = Image.open("map\\terrain\\colormap_spring.dds")
-		w,h = colormap.size
+		w,h = Image.open("map\\terrain\\colormap_spring.dds").size
 		if terrain_w % w != 0:
 			print(f"The width of the terrain.bmp is not a multiple of the width of the colormap_spring.dds, while not necessary the result will probably look worse than if it was.")
 		if terrain_h % h != 0:
@@ -1514,8 +1604,7 @@ def check_gfx():
 	else:
 		print(f"There is no map\\terrain\\colormap_spring.dds image.")
 	if os.path.exists("map\\terrain\\colormap_water.dds"):
-		colormap = Image.open("map\\terrain\\colormap_water.dds")
-		w,h = colormap.size
+		w,h = Image.open("map\\terrain\\colormap_water.dds").size
 		if terrain_w % w != 0:
 			print(f"The width of the terrain.bmp is not a multiple of the width of the colormap_water.dds, while not necessary the result will probably look worse than if it was.")
 		if terrain_h % h != 0:
@@ -1534,16 +1623,22 @@ def check_gfx():
 	for tag in TAG_SET - {"REB","NAT","PIR"}:
 		if os.path.exists("gfx\\flags\\" + tag + ".tga"):
 			w,h = Image.open("gfx\\flags\\" + tag + ".tga").size
-			if not 128 == w == h:
+			if DONT_IGNORE_ISSUE["WRONG_PICTURE_SIZE"] and not 128 == w == h:
 				print(f"The flag {tag}.tga does not have the size 128 x 128.")
 		elif DONT_IGNORE_ISSUE["MISSING_FLAGS"]:
 			print(f"There is no flag for {tag}.")
+	w,h = Image.open(ATLAS_PATH).size
+	if not (ATLAS_SIZE[0] in [2,3,4,5,6,7,8] and ATLAS_SIZE[1] in [2,3,4,5,6,7,8]):
+		print(f"The ATLAS_SIZE {ATLAS_SIZE} you entered is not within the accepted limit.")
+	elif w % ATLAS_SIZE[0] != 0 or h % ATLAS_SIZE[1] != 0 or w % ATLAS_SIZE[0] != h % ATLAS_SIZE[1]:
+		print(f"The size {w},{h} of {ATLAS_PATH} is either not a multiple of the size {ATLAS_SIZE} you entered or the ratio is not equal.")
 	terrain_set = set(PROVINCE_TERRAIN_DICTIONARY.keys())
+	picture_set = set()
 	for root, dirs, files in os.walk("gfx\\interface\\"):
 		for file in files:
 			if file.startswith("colony_terrain_"):
 				w,h = Image.open(os.path.join(root, file)).size
-				if (w,h) != (330,85):
+				if DONT_IGNORE_ISSUE["WRONG_PICTURE_SIZE"] and (w,h) != (330,85):
 					print(f"{os.path.join(root, file)} does not have the size 330,85")
 				if not file.endswith(".dds"):
 					print(f"{os.path.join(root, file)} is not a .dds file")
@@ -1552,11 +1647,13 @@ def check_gfx():
 				if terrain in terrain_set:
 					terrain_set.remove(terrain)
 				elif terrain in PROVINCE_TERRAIN_DICTIONARY:
-					print(f"The terrain {terrain} has at least 2 terrain pictures, one at {os.path.join(root, file)}")
+					print(f"I am aware that terrain and pictures are connected in the interface files, but for now i simply match them through their name. There are at least 2 pictures named after terrain {terrain}, one at {os.path.join(root, file)}")
 				else:
-					print(f"The terrain {terrain} is not in map\\terrain.txt, but there is a picture for it.")
-	if terrain_set:
-		print(f"Some terrain does not have a picture in the gfx\\interface folder, specifically: {terrain_set}")
+					picture_set.add(terrain)
+	if terrain_set - {"ocean","inland_ocean"} - set(TERRAIN_DICTIONARY["FORCE_INLAND_OCEAN"]):
+		print(f"I am aware that terrain and pictures are connected in the interface files, but for now i simply match them through their name. Some terrain does not have a picture with an identical name in the gfx\\interface folder, so for conversion to function you need to COPY AND rename the intended picture, do NOT just rename it, the old picture is required for EU4 after all, specifically: {terrain_set - {"ocean","inland_ocean"} - set(TERRAIN_DICTIONARY["FORCE_INLAND_OCEAN"])}")
+	if picture_set and terrain_set - {"ocean","inland_ocean"} - set(TERRAIN_DICTIONARY["FORCE_INLAND_OCEAN"]):
+		print(f"There are pictures for at least one terrain without an identically named terrain in map\\terrain.txt, specifically: {picture_set}. You can ignore this warning, but it is mentioned in case a terrain misses a picture due to using one with a slightly different name, so you can easily find the likely intended ones that you have to copy and rename.")
 	return
 
 if not I_READ_THE_INSTRUCTIONS:

@@ -55,8 +55,11 @@ POPS_AND_RATIOS = {
 	"soldiers":{"standard":200,"native":310,"tribal":330}
 }
 RIVER_DICTIONARY = {0:0, 1:1, 2:2, 3:6, 4:8, 5:10, 6:12, 7:14, 8:16, 9:18, 10:20, 11:22, 12:22, 13:22, 14:22, 254:254, 255:255} # If the mod checker did not mention anything about river colors not being in the dictionary you don't need to change this, otherwise assign the additional index to 22, which is the thickest possible river in Victoria 2 and still considerably thinner than EU4 rivers at index 11 would be.
-#TERRAIN_DICTIONARY = {0:5, 1:5, 2:3, 3:36, 4:12, 5:12, 6:43, 7:43, 8:44, 9:45, 10:46, 11:47, 12:48, 13:49, 14:50, 15:37, 16:4, 17:38, 18:39, 19:27, 20:28, 21:31, 22:4, 23:4, 24:49, 25:55, 26:55, 27:55, 28:50, 29:50, 30:4, 31:4, 32:48, 33:48, 34:10, 35:11, 36:254, 37:4, 38:254, 39:55, 254:43, 255:12 } # For Elder Scrolls Universalis
-TERRAIN_DICTIONARY = {0:32, 1:17, 2:28, 3:49, 4:32, 5:33, 6:31, 7:28, 8:17, 9:47, 10:8, 11:9, 12:12, 13:13, 14:14, 15:254, 16:4, 17:254, 19:55, 20:36, 21:11, 22:37, 23:19, 24:39, 35:55, 254:43, 255:12 } # YOU MUST CHANGE THIS, UNLESS YOUR MOD USES THE EXACT SAME VALUES AS BASE EU4! Whatever the index of the terrain in terrain.txt is mentioned as color, is the first number before the : and whatever you want it to be in V2 comes after the : and you should look at the Victoria 2 map/terrain/texturesheet.tga to see what fits best. For example in EU4 the terrain for ocean has the index/color = {15} and inland_ocean has color = {17} and both of those have to be set to 254 as Victoria 2 uses this color index for it's oceans and does not have inland oceans.
+ATLAS_PATH = "map\\terrain\\atlas0.dds" # The texture to color the terrain map seems to be always here, but just to be sure i may as well make it easy to change the path.
+ATLAS_SIZE = (4,4) # Change this to the number of different squares in the map\terrain\atlas0 file, however (8,8) is the maximum. First number is from left to right, second is up down, although they are most likely the same.
+ATLAS_DICTIONARY = {35:{"atlas_index":3,"bmp_index":52}} # The first number is the EU4 terrain index. For example EU4 uses 35 for the coastline, but has only 16 squares, so only "atlas_index" 0 to 15 could have a terrain, which means you either have to reuse another "atlas_index" like the desert which is 3 or add some coastline terrain to "bmp_index" 52 in the texturesheet after creating the output, as Victoria 2 uses this square for the coastline. Mods can use a different "atlas_index" for the coastline like Elder Scrolls Universalis uses 39 instead, so make sure you pick the right one. Similarly EU4 has grassland at index 5, but that square is simply gray, so you either need to add the terrain yourself after creating the output or set this to another value like 5:{"atlas_index":0} as "atlas_index" 0 is also grassland and has the texture. If you know you want to add or change some terrain manually afterwards you can just set the "atlas_index" to 64 and the square will be black (0,0,0), if you add a completely incorrect value the program may crash. Do not add a value for oceans though, they have their default Victoria 2 texture. Only the coastline needs a "bmp_index" and it must be 52, but you can add it for any other terrain as well, if you want them in a particular order, however the number for each MUST BE UNIQUE and from 0 to 63, but again not 52 as that is for the coastline. If you want to see how the atlas squares will look in V2 before deciding, you can simply run these 2 lines in the mod folder:
+# from PIL import Image
+# Image.open("map\\terrain\\atlas0.dds").convert(mode="RGB").save("texturesheet.tga")
 #FORCE_OCEAN = ["impassable_mountains"] # For Elder Scrolls Universalis
 FORCE_OCEAN = [] # You can simply leave the brackets empty [], if there are no provinces which are continental in EU4, but you want them to be ocean in Victoria 2. Otherwise just like with the mod checker you have to insert the terrain that is used to identify them. For example Elder Scrolls Universalis has impassable river provinces, which use "impassable_mountains" terrain as identifier and are turned into ocean provinces in Victoria 2/OpenVic. Keep in mind that the terrain already has to be ocean for these provinces and you can use the mod checker to automatically generate both the terrain.bmp and rivers.bmp with correct terrain, although the generated output will be called terrain2.bmp and rivers2.bmp, so you have to at least temporarily rename the terrain file. The river file will actually be generated like this here as well though, so there is no need to rename it.
 RGO_DICTIONARY = {"precious_metal":50,"iron":112,"coal":200,"sulphur":35,"timber":281,"tropical_wood":63,"dye":200,"wool":176,"cotton":200,"silk":30,"grain":1000,"fruit":262,"fish":239,"cattle":267,"coffee":63,"tea":400,"tobacco":200,"opium":21} # Don't change these values unless you also change the V2 economy or realised that some values are too high or low and the problem is not just due to randomness.
@@ -101,7 +104,7 @@ def verify_date(date):
 			return "1444.11.11"
 	return f"{years}.{months}.{days}"
 
-# replace everything with " " between all occurances of a given string ending with a {, including that string, until the brackets close again and return the new string or "#" if an error occurs.
+# replace everything with " " between all occurances of a given string ending with a {, including that string, until the brackets close again and return the new string.
 def remove_text_between_brackets(text,sub_string):
 	while text.__contains__(sub_string):
 		[prior_text,leftover] = text.split(sub_string,maxsplit=1)
@@ -116,6 +119,20 @@ def remove_text_between_brackets(text,sub_string):
 					break
 		text = prior_text + leftover
 	text = " " + text.strip() + " "
+	return text
+
+# Will return the string between the first occurance starting substring and the closing bracket. Any additional occurances of the same subtring will be ignored.
+def get_text_between_brackets(text,sub_string):
+	text = text.split(sub_string,maxsplit=1)[1]
+	counter = 1
+	for index in range(len(text)):
+		if text[index] == "{":
+			counter += 1
+		elif text[index] == "}":
+			counter -= 1
+			if counter == 0:
+				text = text[:index]
+				break
 	return text
 
 # creates a set of all cultures and a dictionary {culture_group:{culture:{male_names:"names",female_names:"names",dynasty_names:"names"}}}
@@ -454,6 +471,42 @@ def create_country_dictionary():
 	tag_set = set(tag_dictionary.keys())
 	return [tag_set,tag_dictionary,country_dictionary,technology_set]
 
+def create_terrain_list():
+	text = format_text_in_path("map\\terrain.txt")
+	terrain = get_text_between_brackets(text,"categories = {")
+	terrain_index = get_text_between_brackets(text," terrain = {")
+	terrain_index_list = terrain_index.split()
+	terrain = " ".join(terrain.split(" pti = { type = pti } ",maxsplit=1))
+	terrain_list = terrain.split(" = {")
+	province_terrain_dictionary = dict()
+	terrain_bmp_index_dictionary = dict()
+	terrain_modifier_set = {"supply_limit","movement_cost","combat_width","defence"}
+	while len(terrain_list) > 1:
+		last_word = terrain_list[0].rsplit(" ",maxsplit=1)[1]
+		if last_word == "color":
+			province_terrain_dictionary[current_terrain]["color"] = terrain_list[1].split("}",maxsplit=1)[0]
+		elif last_word == "terrain_override":
+			province_terrain_dictionary[current_terrain]["terrain_override"] = set(terrain_list[1].split("}",maxsplit=1)[0].split())
+		else:
+			current_terrain = last_word
+			province_terrain_dictionary[current_terrain] = dict()
+			province_terrain_dictionary[current_terrain]["movement_cost"] = 1
+		terrain_list.remove(terrain_list[0])
+		terrain_text_list = terrain_list[0].split()
+		for i in range(0, len(terrain_text_list) - 3):
+			if terrain_text_list[i] in terrain_modifier_set and terrain_text_list[i+1] == "=":
+				if terrain_text_list[i] == "movement_cost":
+					modifier_value = max(1,float(terrain_text_list[i+2]))
+				elif terrain_text_list[i] == "combat_width":
+					modifier_value = max(-0.8,float(terrain_text_list[i+2]))
+				else:
+					modifier_value = float(terrain_text_list[i+2])
+				if modifier_value != 0:
+					province_terrain_dictionary[current_terrain][terrain_text_list[i]] = str(int(modifier_value)) if modifier_value.is_integer() else str(modifier_value)
+	for i in range(0,len(terrain_index_list),12):
+		terrain_bmp_index_dictionary[int(terrain_index_list[i + 9])] = terrain_index_list[i + 5]
+	return [province_terrain_dictionary,terrain_bmp_index_dictionary]
+
 def create_province_dictionary():
 	full_province_dictionary = dict()
 	for root, dirs, files in os.walk("history/provinces"):
@@ -467,19 +520,21 @@ def create_province_dictionary():
 			sorted_list = get_sorted_dates(text)
 			province_dictionary = get_province_data(text,sorted_list)
 			full_province_dictionary[province_ID] = province_dictionary
-	PROVINCE_TERRAIN_DICTIONARY = create_terrain_list()
 	force_ocean_set = set()
-	for terrain in FORCE_OCEAN:
+	for terrain in PROVINCE_TERRAIN_DICTIONARY:
 		if "terrain_override" in PROVINCE_TERRAIN_DICTIONARY[terrain]:
-			force_ocean_set = force_ocean_set.union(PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"])
-	# TODO add terrain to province dictionary once province terrain pictures are also added.
+			if terrain in FORCE_OCEAN:
+				force_ocean_set = force_ocean_set.union(PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"])
+			elif terrain not in {"ocean","inland_ocean"}:
+				for province in PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"]:
+					full_province_dictionary[province]["terrain"] = terrain
 	[continent_list,ocean_set,water_province_set,max_provinces] = create_continent_list(force_ocean_set)
 	for index in range(len(continent_list)):
 		for province in continent_list[index][1]:
 			if province not in full_province_dictionary:
 				full_province_dictionary[province] = dict()
 			full_province_dictionary[province]["continent"] = continent_list[index][0]
-	# TODO add terrain and life rating
+	# TODO add terrain specific life rating
 	return [full_province_dictionary,continent_list,ocean_set,water_province_set,max_provinces]
 
 # Checks if dates contain obvious mistakes like cultures that don't exist in the culture files.
@@ -521,34 +576,6 @@ def get_province_data(text,sorted_list):
 			if tag in current_cores:
 				current_cores.remove(tag)
 	return dict() # This case should never happen, but just to be sure.
-
-def create_terrain_list():
-	text = format_text_in_path("map/terrain.txt")
-	terrain = text.split("categories = {",maxsplit=1)[1]
-	counter = 1
-	for index in range(len(terrain)):
-		if terrain[index] == "{":
-			counter += 1
-		elif terrain[index] == "}":
-			counter -= 1
-			if counter == 0:
-				terrain = terrain[:index - 1]
-				break
-	terrain = " ".join(terrain.split(" pti = { type = pti } ",maxsplit=1))
-	terrain_list = terrain.split(" = {")
-	province_terrain_dictionary = dict()
-	while len(terrain_list) > 1:
-		current_terrain = terrain_list[0].rsplit(" ",maxsplit=1)[1]
-		province_terrain_dictionary[current_terrain] = dict()
-		terrain_list.remove(terrain_list[0])
-		while terrain_list[0].rsplit(" ",maxsplit=1)[1] in {"color","terrain_override"}:
-			if terrain_list[0].rsplit(" ",maxsplit=1)[1] == "color":
-				province_terrain_dictionary[current_terrain]["color"] = terrain_list[1].split("}",maxsplit=1)[0]
-			else:
-				terrain_override = set(terrain_list[1].split("}",maxsplit=1)[0].split())
-				province_terrain_dictionary[current_terrain]["terrain_override"] = terrain_override
-			terrain_list.remove(terrain_list[0])
-	return province_terrain_dictionary
 
 def create_continent_list(force_ocean_set):
 	text = format_text_in_path("map/continent.txt")
@@ -805,6 +832,9 @@ def create_localisation_text():
 		localisation_dictionary[religion] = dict()
 	for tech_group in TECH_GROUP_SET:
 		localisation_dictionary[tech_group] = dict()
+	for terrain in set(PROVINCE_TERRAIN_DICTIONARY.keys()) - {"ocean","inland_ocean"}:
+		localisation_dictionary[terrain] = dict()
+		localisation_dictionary[terrain + "_desc"] = dict()
 	for government in GOVERNMENT_SET:
 		if government + "_name" in EU4_LOCALISATION_DICTIONARY:
 			localisation_dictionary[government + "_name"] = EU4_LOCALISATION_DICTIONARY[government + "_name"]
@@ -827,7 +857,7 @@ def create_localisation_text():
 								key = key.strip()
 								if key not in localisation_dictionary:
 									continue
-								value = value[value.find('"') + 1:value.rfind('"')]
+								value = value[value.find('"') + 1:value.rfind('"')].replace('\\"','"')
 								localisation_dictionary[key][language] = value
 	PROV_TUPLE = sorted(tuple(PROV_SET),key=str)
 	return localisation_dictionary,PROV_TUPLE
@@ -998,6 +1028,7 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 	TECH_GROUP_SET = get_tech_groups()
 	DATE_STRUCTURE = re.compile(r'[^-0-9]{1}[-]{0,1}[0-9]{1,5}["."][0-9]{1,2}["."][0-9]{1,2} = {')
 	[TAG_SET,TAG_DICTIONARY,COUNTRY_DICTIONARY,TECHNOLOGY_SET] = create_country_dictionary()
+	[PROVINCE_TERRAIN_DICTIONARY,TERRAIN_BMP_INDEX_DICTIONARY] = create_terrain_list()
 	[PROVINCE_DICTIONARY,CONTINENT_LIST,OCEAN_SET,WATER_PROVINCE_SET,MAX_PROVINCES] = create_province_dictionary()
 	[CLIMATE_LIST,IMPASSABLE_SET] = create_climate_list()
 	[DEFINITION_CSV,RGB_DICTIONARY,PORT_POSITIONS] = create_positions_list()
@@ -1119,7 +1150,7 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 			V2_flag.save("OpenVic/gfx/flags/" + tag + ".tga",compression="tga_rle")
 		else:
 			Image.new(mode="RGB", size=(93,64), color=(0,0,0)).save("OpenVic/gfx/flags/" + tag + ".tga",compression="tga_rle")
-	os.makedirs("OpenVic/gfx/interface", exist_ok = True)
+	os.makedirs("OpenVic\\gfx\\interface\\terrain", exist_ok = True)
 	religion_dds = Image.open("gfx/interface/icon_religion_small.dds") # The small version in EU4 is the required size for V2 and the small version in V2 seems to be not used at all.
 	w,h = religion_dds.size
 	religion_dds.save("OpenVic/gfx/interface/icon_religion.dds")
@@ -1133,6 +1164,111 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 	with open("OpenVic/interface/general_gfx.gfx",'w') as file:
 		for line in text:
 			file.writelines(line)
+	EU4_TERRAIN_PICTURES = set()
+	for root, dirs, files in os.walk("gfx\\interface\\"):
+		for file in files:
+			if file.startswith("colony_terrain_"):
+				terrain = file.split("colony_terrain_",maxsplit=1)[1].rsplit(".dds",maxsplit=1)[0]
+				if terrain in PROVINCE_TERRAIN_DICTIONARY and terrain not in FORCE_OCEAN:
+					Image.open(os.path.join(root, file)).resize((374,94),resample=Image.LANCZOS).save("OpenVic\\gfx\\interface\\terrain\\" + terrain + ".tga",compression="tga_rle")
+					EU4_TERRAIN_PICTURES.add(terrain)
+	text = []
+	with open("OpenVic\\interface\\province_interface.gfx",'r') as file:
+		for line in file:
+			if line.startswith("	### Terrain ###"):
+				text.append(line)
+				text.append('\n')
+				for terrain in EU4_TERRAIN_PICTURES:
+					text.append('	spriteType = {\n')
+					text.append('		name = "GFX_terrainimg_' + terrain + '"\n')
+					text.append('		texturefile = "gfx\\interface\\terrain\\' + terrain + '.tga"\n')
+					text.append('		norefcount = yes\n')
+					text.append('	}\n')
+				if "ocean" not in EU4_TERRAIN_PICTURES:
+					text.append('	spriteType = {\n')
+					text.append('		name = "GFX_terrainimg_ocean"\n')
+					if "inland_ocean" in EU4_TERRAIN_PICTURES:
+						text.append('		texturefile = "gfx\\interface\\terrain\\inland_ocean.tga"\n')
+					else:
+						text.append('		texturefile = "gfx\\interface\\terrain\\' + terrain + '.tga"\n')
+					text.append('		norefcount = yes\n')
+					text.append('	}\n')
+			else:
+				text.append(line)
+	with open("OpenVic\\interface\\province_interface.gfx",'w') as file:
+		for line in text:
+			file.writelines(line)
+	text = []
+	with open("OpenVic\\map\\terrain.txt",'r') as file:
+		for line in file:
+			if line.startswith("# categories"):
+				for terrain in PROVINCE_TERRAIN_DICTIONARY:
+					if terrain in ["ocean","inland_ocean"] or terrain in FORCE_OCEAN:
+						continue
+					text.append('	' + terrain + ' = {\n')
+					text.append('		color = {' + PROVINCE_TERRAIN_DICTIONARY[terrain]["color"] + '}\n')
+					text.append('		movement_cost = ' + PROVINCE_TERRAIN_DICTIONARY[terrain]["movement_cost"] + '\n')
+					if "combat_width" in PROVINCE_TERRAIN_DICTIONARY[terrain]:
+						text.append('		combat_width = ' + PROVINCE_TERRAIN_DICTIONARY[terrain]["combat_width"] + '\n')
+					if "defence" in PROVINCE_TERRAIN_DICTIONARY[terrain]:
+						text.append('		defence = ' + PROVINCE_TERRAIN_DICTIONARY[terrain]["defence"] + '\n')
+					if "supply_limit" in PROVINCE_TERRAIN_DICTIONARY[terrain]:
+						text.append('		supply_limit = ' + PROVINCE_TERRAIN_DICTIONARY[terrain]["supply_limit"] + '\n')
+					text.append('	}\n')
+			elif line.startswith("# text"):
+				terrain_order = dict()
+				for key,value in ATLAS_DICTIONARY.items():
+					if "bmp_index" in value:
+						terrain_order[ATLAS_DICTIONARY[key]["bmp_index"]] = TERRAIN_BMP_INDEX_DICTIONARY[key]
+				n = 0
+				for i in range(0,64):
+					if i in TERRAIN_BMP_INDEX_DICTIONARY:
+						if TERRAIN_BMP_INDEX_DICTIONARY[i] not in ["ocean","inland_ocean"] and TERRAIN_BMP_INDEX_DICTIONARY[i] not in FORCE_OCEAN:
+							if i in ATLAS_DICTIONARY:
+								if "bmp_index" in ATLAS_DICTIONARY[i]:
+									continue
+							while n in terrain_order:
+								n += 1
+							if i not in ATLAS_DICTIONARY:
+								ATLAS_DICTIONARY[i] = dict()
+								ATLAS_DICTIONARY[i]["atlas_index"] = n
+							if "bmp_index" not in ATLAS_DICTIONARY[i]:
+								ATLAS_DICTIONARY[i]["bmp_index"] = n
+							terrain_order[n] = TERRAIN_BMP_INDEX_DICTIONARY[i]
+							n += 1
+						else:
+							ATLAS_DICTIONARY[i] = dict()
+							ATLAS_DICTIONARY[i]["atlas_index"] = 254
+							ATLAS_DICTIONARY[i]["bmp_index"] = 254
+				for i in range(0,64):
+					if i % 4 == 0 and i != 0:
+						text.append('\n')
+					if i in terrain_order:
+						text.append('text_' + str(i) + ' = { type = ' + terrain_order[i] + ' color = { ' + str(i) + ' } priority = ' + str(i) + ' }\n')
+					else:
+						text.append('text_' + str(i) + ' = { type = unused color = { ' + str(i) + ' } priority = ' + str(i) + ' }\n')
+			else:
+				text.append(line)
+	with open("OpenVic\\map\\terrain.txt",'w') as file:
+		for line in text:
+			file.writelines(line)
+	atlas = Image.open(ATLAS_PATH).convert(mode="RGB")
+	w,h = atlas.size
+	w = w / ATLAS_SIZE[0]
+	h = h / ATLAS_SIZE[1]
+	texturesheet = Image.new(mode="RGB", size=(2048,2048), color=(0,0,0))
+	for i in ATLAS_DICTIONARY:
+		if ATLAS_DICTIONARY[i]["atlas_index"] < ATLAS_SIZE[0] * ATLAS_SIZE[1]:
+			left = (ATLAS_DICTIONARY[i]["atlas_index"] % ATLAS_SIZE[0]) * w
+			upper = (ATLAS_DICTIONARY[i]["atlas_index"] // ATLAS_SIZE[0]) * h
+			right = left + w
+			lower = upper + h
+			texture = atlas.crop((left,upper,right,lower)).resize((256,256),resample=Image.LANCZOS)
+			left = (ATLAS_DICTIONARY[i]["bmp_index"] % 8) * 256
+			upper = (ATLAS_DICTIONARY[i]["bmp_index"] // 8) * 256
+			texturesheet.paste(texture,(left,upper))
+	os.makedirs("OpenVic\\map\\terrain", exist_ok = True)
+	texturesheet.save("OpenVic\\map\\terrain\\texturesheet.tga",compression="tga_rle")
 	for tag in COUNTRY_DICTIONARY:
 		if tag == "NAT" or tag == "PIR":
 			continue
@@ -1175,6 +1311,8 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 		output_path = os.getcwd() + "\\OpenVic\\history\\provinces\\OpenVic_" + PROVINCE_DICTIONARY[province]["continent"] + "\\" + province + ".txt"
 		os.makedirs(os.path.dirname(output_path), exist_ok = True)
 		with open(output_path,"a",encoding=OUTPUT_ENCODING,newline='\n') as newfile:
+			if "terrain" in PROVINCE_DICTIONARY[province]:
+				newfile.write("terrain = " + PROVINCE_DICTIONARY[province]["terrain"] + "\n")
 			if "trade_goods" in PROVINCE_DICTIONARY[province]:
 				newfile.write("life_rating = 30\ntrade_goods = " + random.choices(RGO_LIST,weights=RGO_WEIGHT,k=1)[0] + "\n")
 				#newfile.write("trade_goods = " + PROVINCE_DICTIONARY[province]["trade_goods"] + "\n") # TODO change the dictionary to convert EU4 goods and only randomise the rest, but also with weighted odds so goods are added proportionally.
@@ -1213,6 +1351,19 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 	create_localisation_file(RELIGION_SET,[""],"religions")
 	create_localisation_file(TECH_GROUP_SET,[""],"technology_groups")
 	# The 0 in front of the normal localisation file name is to make sure that this localisation gets applied, rather than base V2 localisation.
+	output_path = os.getcwd() + "\\OpenVic\\localisation\\0 terrain.csv"
+	os.makedirs(os.path.dirname(output_path), exist_ok = True)
+	with open(output_path,"a",encoding=OUTPUT_ENCODING,newline='\n') as file:
+		for terrain in set(PROVINCE_TERRAIN_DICTIONARY.keys()) - {"ocean","inland_ocean"} - set(FORCE_OCEAN):
+			file.write(terrain + ";")
+			for language in ["english","french","german","polish","spanish"]:
+				if language in LANGUAGES:
+					file.write(LOCALISATION_DICTIONARY[terrain][language] + "§!\\n" + LOCALISATION_DICTIONARY[terrain + "_desc"][language] + ";")
+				else:
+					file.write(";")
+			for language in set(LANGUAGES) - {"english","french","german","polish","spanish"}:
+				file.write(LOCALISATION_DICTIONARY[terrain][language] + "§!\\n" + LOCALISATION_DICTIONARY[terrain + "_desc"][language] + ";")
+			file.write("\n")
 	output_path = os.getcwd() + "\\OpenVic\\localisation\\0 governments.csv"
 	os.makedirs(os.path.dirname(output_path), exist_ok = True)
 	with open(output_path,"a",encoding=OUTPUT_ENCODING,newline='\n') as file:
@@ -1353,7 +1504,7 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 	load_V2_terrain = V2_terrain.load()
 	for x in range(w):
 		for y in range(h):
-			load_V2_terrain[x,y] = TERRAIN_DICTIONARY[load_EU4_terrain[x,y]]
+			load_V2_terrain[x,y] = ATLAS_DICTIONARY[load_EU4_terrain[x,y]]["bmp_index"]
 	V2_terrain.save("OpenVic/map/terrain.bmp")
 	os.makedirs("OpenVic/map/terrain", exist_ok = True)
 	Image.open("map/terrain/colormap_spring.dds").transpose(Image.FLIP_TOP_BOTTOM).save("OpenVic/map/terrain/colormap.dds") #, pixel_format="DXT1") others that should work with this version: DXT1, DXT3, DXT5, BC2, BC3 and BC5
