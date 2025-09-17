@@ -1269,6 +1269,7 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 			texturesheet.paste(texture,(left,upper))
 	os.makedirs("OpenVic\\map\\terrain", exist_ok = True)
 	texturesheet.save("OpenVic\\map\\terrain\\texturesheet.tga",compression="tga_rle")
+	texturesheet.save("OpenVic\\map\\terrain\\texturesheet2.tga",compression="tga_rle")
 	for tag in COUNTRY_DICTIONARY:
 		if tag == "NAT" or tag == "PIR":
 			continue
@@ -1358,11 +1359,11 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 			file.write(terrain + ";")
 			for language in ["english","french","german","polish","spanish"]:
 				if language in LANGUAGES:
-					file.write(LOCALISATION_DICTIONARY[terrain][language] + "§!\\n" + LOCALISATION_DICTIONARY[terrain + "_desc"][language] + ";")
+					file.write("§Y" + LOCALISATION_DICTIONARY[terrain][language] + "§!\\n" + LOCALISATION_DICTIONARY[terrain + "_desc"][language] + ";")
 				else:
 					file.write(";")
 			for language in set(LANGUAGES) - {"english","french","german","polish","spanish"}:
-				file.write(LOCALISATION_DICTIONARY[terrain][language] + "§!\\n" + LOCALISATION_DICTIONARY[terrain + "_desc"][language] + ";")
+				file.write("§Y" + LOCALISATION_DICTIONARY[terrain][language] + "§!\\n" + LOCALISATION_DICTIONARY[terrain + "_desc"][language] + ";")
 			file.write("\n")
 	output_path = os.getcwd() + "\\OpenVic\\localisation\\0 governments.csv"
 	os.makedirs(os.path.dirname(output_path), exist_ok = True)
