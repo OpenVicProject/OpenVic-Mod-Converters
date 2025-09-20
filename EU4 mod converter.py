@@ -60,8 +60,8 @@ ATLAS_SIZE = (4,4) # Change this to the number of different squares in the map\t
 ATLAS_DICTIONARY = {35:{"atlas_index":3,"bmp_index":52}} # The first number is the EU4 terrain index. For example EU4 uses 35 for the coastline, but has only 16 squares, so only "atlas_index" 0 to 15 could have a terrain, which means you either have to reuse another "atlas_index" like the desert which is 3 or add some coastline terrain to "bmp_index" 52 in the texturesheet after creating the output, as Victoria 2 uses this square for the coastline. Mods can use a different "atlas_index" for the coastline like Elder Scrolls Universalis uses 39 instead, so make sure you pick the right one. Similarly EU4 has grassland at index 5, but that square is simply gray, so you either need to add the terrain yourself after creating the output or set this to another value like 5:{"atlas_index":0} as "atlas_index" 0 is also grassland and has the texture. If you know you want to add or change some terrain manually afterwards you can just set the "atlas_index" to 64 and the square will be black (0,0,0), if you add a completely incorrect value the program may crash. Do not add a value for oceans though, they have their default Victoria 2 texture. Only the coastline needs a "bmp_index" and it must be 52, but you can add it for any other terrain as well, if you want them in a particular order, however the number for each MUST BE UNIQUE and from 0 to 63, but again not 52 as that is for the coastline. If you want to see how the atlas squares will look in V2 before deciding, you can simply run these 2 lines in the mod folder:
 # from PIL import Image
 # Image.open("map\\terrain\\atlas0.dds").convert(mode="RGB").save("texturesheet.tga")
-#FORCE_OCEAN = ["impassable_mountains"] # For Elder Scrolls Universalis
-FORCE_OCEAN = [] # You can simply leave the brackets empty [], if there are no provinces which are continental in EU4, but you want them to be ocean in Victoria 2. Otherwise just like with the mod checker you have to insert the terrain that is used to identify them. For example Elder Scrolls Universalis has impassable river provinces, which use "impassable_mountains" terrain as identifier and are turned into ocean provinces in Victoria 2/OpenVic. Keep in mind that the terrain already has to be ocean for these provinces and you can use the mod checker to automatically generate both the terrain.bmp and rivers.bmp with correct terrain, although the generated output will be called terrain2.bmp and rivers2.bmp, so you have to at least temporarily rename the terrain file. The river file will actually be generated like this here as well though, so there is no need to rename it.
+#FORCE_OCEAN = ["impassable_rivers"] # For Elder Scrolls Universalis
+FORCE_OCEAN = [] # You can simply leave the brackets empty [], if there are no provinces which are continental in EU4, but you want them to be ocean in Victoria 2. Otherwise just like with the mod checker you have to insert the terrain that is used to identify them. For example Elder Scrolls Universalis has impassable river provinces, which use "impassable_rivers" terrain as identifier and are turned into ocean provinces in Victoria 2/OpenVic. Keep in mind that the terrain already has to be ocean for these provinces and you can use the mod checker to automatically generate both the terrain.bmp and rivers.bmp with correct terrain, although the generated output will be called terrain2.bmp and rivers2.bmp, so you have to at least temporarily rename the terrain file. The river file will actually be generated like this here as well though, so there is no need to rename it.
 RGO_DICTIONARY = {"precious_metal":50,"iron":112,"coal":200,"sulphur":35,"timber":281,"tropical_wood":63,"dye":200,"wool":176,"cotton":200,"silk":30,"grain":1000,"fruit":262,"fish":239,"cattle":267,"coffee":63,"tea":400,"tobacco":200,"opium":21} # Don't change these values unless you also change the V2 economy or realised that some values are too high or low and the problem is not just due to randomness.
 THE_MOD_CHECKER_DID_MENTION_NOTHING = False # Switch this to True to get the output once running the modchecker shows no more issues. The "V2 mod standard" folder from Github must be in the same folder as well. If you do not want to fix issues that can be disabled by setting the DONT_IGNORE_ISSUE values to False, then do set it to False and make sure you actually fixed all the ones that can not be disabled. Just here to prevent the people who don't follow the instructions to get broken output or see this script crash and then complain about it as all checks for mistakes are removed, except checks for mistakes that can cause an infinite loop. If you have a sufficiently new Python version installed, probably anything after 3.7 will work as well as a recent PILLOW version, you can run this script. That's it.
 
@@ -214,7 +214,8 @@ def get_cultures():
 def get_religions():
 	religion_dictionary = dict()
 	religion_set = set()
-	COLOR_STRUCTURE = re.compile(r' color = \{ [0-1]{0,1}["."]{0,1}[0-9]{1,3} [0-1]{0,1}["."]{0,1}[0-9]{1,3} [0-1]{0,1}["."]{0,1}[0-9]{1,3} \} ')
+	COLOR_STRUCTURE = re.compile(r' color = \{ [0-1][.][0-9]{1,3} [0-1][.][0-9]{1,3} [0-1][.][0-9]{1,3} \}')
+	OPTIONAL_COLOR_STRUCTURE = re.compile(r' color = \{ [0-9]{1,3} [0-9]{1,3} [0-9]{1,3} \}')
 	ICON_STRUCTURE = re.compile(r' icon = [0-9]{1,3} ')
 	for root, dirs, files in os.walk("common/religions"):
 		for file in files:
@@ -222,16 +223,10 @@ def get_religions():
 			if text == "  ":
 				continue
 			colors = re.findall(COLOR_STRUCTURE,text)
+			optional_colors = re.findall(OPTIONAL_COLOR_STRUCTURE,text)
+			if optional_colors:
+				colors = optional_colors
 			icons = re.findall(ICON_STRUCTURE,text)
-			divide_by_255 = False
-			for color in colors:
-				color_list = color.split(" ")[4:7]
-				for index in range(3):
-					if float(color_list[index]) > 1:
-						divide_by_255 = True
-						break
-				if divide_by_255:
-					break
 			counter = 0
 			religion_group = religion = ""
 			for i in range(len(icons)):
@@ -262,7 +257,7 @@ def get_religions():
 						counter -= 1
 				icon = icons[i].split(" ")[3]
 				color = colors[i].split(" ")[4:7]
-				if divide_by_255:
+				if optional_colors:
 					for index in range(3):
 						color[index] = str(round(int(color[index])/255,3))
 				color = "{ " + color[0] + " " + color[1] + " " + color[2] + " }"
@@ -306,7 +301,7 @@ def get_tech_groups():
 # gets all the text from ?.?.? = { text } for a specified date, including further occurances of it and returns them, but adds " # " between them or returns "#" if either the date entry is empty or none is found or an error occurs.
 def get_date_text(text,date):
 	date_text = " "
-	next_date = re.search(r'[^-0-9]{1}' + date + " = {",text)
+	next_date = re.search(r'[^-0-9]' + date + " = {",text)
 	while "None" != str(next_date):
 		counter = 1
 		text = text[next_date.end():]
@@ -319,7 +314,7 @@ def get_date_text(text,date):
 					date_text += text[:i] + " # "
 					text = text[i + 1:]
 					break
-		next_date = re.search(r'[^-0-9]{1}' + date + " = {",text)
+		next_date = re.search(r'[^-0-9]' + date + " = {",text)
 	date_text = " " + " ".join(date_text.split()) + " "
 	if date_text == "  ":
 		return "#"
@@ -332,7 +327,7 @@ def get_base_date_text(text,sorted_list):
 	for date in sorted_list:
 		if date == "BASE_DATE" or date == "START_DATE":
 			continue
-		next_date = re.search(r'[^-0-9]{1}' + date + " = {",text)
+		next_date = re.search(r'[^-0-9]' + date + " = {",text)
 		while str(next_date) != "None":
 			prior_text = text[:next_date.start() + 1]
 			leftover = text[next_date.end():]
@@ -346,7 +341,7 @@ def get_base_date_text(text,sorted_list):
 						leftover = leftover[i + 1:]
 						break
 			text = prior_text + " ## " + leftover
-			next_date = re.search(r'[^-0-9]{1}' + date + " = {",text)
+			next_date = re.search(r'[^-0-9]' + date + " = {",text)
 	text = " " + " ".join(text.split()) + " "
 	if text == "  ":
 		return "#"
@@ -1026,7 +1021,7 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 	[RELIGION_DICTIONARY,RELIGION_SET] = get_religions()
 	GOVERNMENT_SET = get_governments()
 	TECH_GROUP_SET = get_tech_groups()
-	DATE_STRUCTURE = re.compile(r'[^-0-9]{1}[-]{0,1}[0-9]{1,5}["."][0-9]{1,2}["."][0-9]{1,2} = {')
+	DATE_STRUCTURE = re.compile(r'[^-0-9]-?[0-9]{1,5}[.][0-9]{1,2}[.][0-9]{1,2} = {')
 	[TAG_SET,TAG_DICTIONARY,COUNTRY_DICTIONARY,TECHNOLOGY_SET] = create_country_dictionary()
 	[PROVINCE_TERRAIN_DICTIONARY,TERRAIN_BMP_INDEX_DICTIONARY] = create_terrain_list()
 	[PROVINCE_DICTIONARY,CONTINENT_LIST,OCEAN_SET,WATER_PROVINCE_SET,MAX_PROVINCES] = create_province_dictionary()
@@ -1495,18 +1490,20 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 	V2_river_bmp = create_river_bmp()
 	V2_river_bmp.save("OpenVic/map/rivers.bmp")
 	EU4_terrain = Image.open("map/terrain.bmp").transpose(Image.FLIP_TOP_BOTTOM)
+	terrain_palette = EU4_terrain.getpalette()
+	terrain_palette += [0] * max(0,768 - len(terrain_palette))
 	w,h = EU4_terrain.size
 	load_EU4_terrain = EU4_terrain.load()
-	V2_terrain = Image.new(mode="P", size=(w,h), color=(0,0,0))
-	terrain_palette = [236, 236, 236, 210, 210, 210, 176, 176, 176, 140, 140, 140, 112, 112, 112, 86, 86, 86, 78, 78, 78, 56, 56, 56, 152, 211, 131, 134, 191, 92, 111, 162, 57, 86, 124, 27, 64, 97, 12, 76, 86, 4, 39, 66, 0, 33, 40, 0, 160, 212, 220, 120, 180, 202, 75, 147, 174, 45, 119, 146, 37, 96, 126, 15, 63, 90, 6, 41, 78, 2, 20, 41, 235, 179, 233, 213, 144, 199, 181, 111, 177, 180, 86, 179, 192, 90, 117, 173, 59, 83, 162, 39, 83, 127, 24, 60, 231, 32, 55, 179, 11, 27, 138, 11, 26, 117, 11, 16, 99, 7, 11, 82, 4, 8, 62, 2, 5, 39, 0, 2, 118, 245, 217, 97, 220, 193, 56, 199, 167, 48, 175, 147, 31, 154, 127, 16, 122, 99, 2, 94, 74, 0, 73, 57, 241, 210, 151, 225, 192, 130, 206, 169, 99, 172, 136, 67, 150, 113, 41, 123, 90, 27, 101, 71, 15, 73, 50, 6, 156, 139, 228, 136, 119, 210, 117, 99, 194, 80, 65, 146, 65, 52, 121, 45, 34, 95, 26, 17, 67, 16, 11, 41]
-	terrain_palette.extend(570 * [0])
-	terrain_palette += [255, 255, 255, 150, 48, 209]
-	V2_terrain.putpalette(terrain_palette)
-	load_V2_terrain = V2_terrain.load()
 	for x in range(w):
 		for y in range(h):
-			load_V2_terrain[x,y] = ATLAS_DICTIONARY[load_EU4_terrain[x,y]]["bmp_index"]
-	V2_terrain.save("OpenVic/map/terrain.bmp")
+			load_EU4_terrain[x,y] = ATLAS_DICTIONARY[load_EU4_terrain[x,y]]["bmp_index"]
+	terrain_palette[762:765] = [0, 0, 255] # TODO use correct terrain colors eventually
+	EU4_terrain.putpalette(terrain_palette)
+	EU4_terrain.save("OpenVic\\map\\terrain.bmp")
+	terrain_palette = [140, 125, 90] * 256
+	terrain_palette[762:765] = [200, 200, 175]
+	EU4_terrain.putpalette(terrain_palette)
+	EU4_terrain.convert(mode="RGBA").resize((266,102),resample=Image.LANCZOS).transpose(Image.FLIP_TOP_BOTTOM).save("OpenVic\\gfx\\interface\\minimap.dds")
 	os.makedirs("OpenVic/map/terrain", exist_ok = True)
 	Image.open("map/terrain/colormap_spring.dds").transpose(Image.FLIP_TOP_BOTTOM).save("OpenVic/map/terrain/colormap.dds") #, pixel_format="DXT1") others that should work with this version: DXT1, DXT3, DXT5, BC2, BC3 and BC5
 	Image.new(mode="RGBA", size=(1,1), color=(128,128,128,255)).save("OpenVic/map/terrain/colormap_no_shadow.dds")

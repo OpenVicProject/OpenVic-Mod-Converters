@@ -12,10 +12,12 @@ TERRAIN_DICTIONARY = {
 	"INLAND_OCEAN_INDEX": 17, # Same as with OCEAN_INDEX.
 	"CONTINENTAL_INDEX": 0, # This and COASTAL_INDEX will only be used to automatically create a new terrain.bmp, if you enable the option below. Specifically any pixel belonging to a continental province that is currently an ocean pixel will be changed to CONTINENTAL_INDEX.
 	"COASTAL_INDEX": 35, # Any coastal pixel that is not actually coastal will be replaced by CONTINENTAL_INDEX.
-	"FORCE_INLAND_OCEAN": ["inland_ocean"] # You can simply make the brackets empty [] if you don't want the following to happen: Any province in the terrain_override part for the terrains in this list will be turned into inland ocean terrain in the terrain.bmp and rivers.bmp, just like any current inland ocean province not in this list will have it's terrain turned into regular ocean terrain, if you set "INCORRECT_TERRAIN" = True. For example Elder Scrolls Universalis has impassable river provinces, which use "impassable_mountains" terrain as identifier, as i currently intend to turn these rivers into impassable ocean provinces in Victoria 2/OpenVic.
+	"FORCE_INLAND_OCEAN": ["inland_ocean"] # You can simply make the brackets empty [] if you don't want the following to happen: Any province in the terrain_override part for the terrains in this list will be turned into inland ocean terrain in the terrain.bmp and rivers.bmp, just like any current inland ocean province not in this list will have it's terrain turned into regular ocean terrain, if you set "INCORRECT_TERRAIN" = True. For example Elder Scrolls Universalis has impassable river provinces, which use "impassable_rivers" terrain as identifier, as i currently intend to turn these rivers into impassable ocean provinces in Victoria 2/OpenVic.
 }
 ATLAS_PATH = "map\\terrain\\atlas0.dds" # The textures for the terrain map seem to be always here, but just to be sure i may as well make it easy to change the path.
 ATLAS_SIZE = (4,4) # Change this to the number of different squares in the map\terrain\atlas0 file, however (8,8) is the maximum and (2,2) the minimum. First number is from left to right, second is up down, although they are most likely the same.
+MIN_PROVINCE_SIZE = 10 # You will get a warning for every province that has less pixels than the number you enter, as it may not be an intended province, but rather some leftover pixels.
+MAX_PROVINCE_SIZE = 16363 # When provinces are too big Victoria 2 can bug out, like a large land province can be shown as partially ocean. Simply splitting up the provinces will solve that issue, though it may not be necessary to do that, so just increase the size if there are no issues with this and you don't want to see the warnings.
 DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output files, so you can choose to ignore them, though in some cases you really should check them.
 	"INDIVIDUAL_PIXELS":False, # Some provinces will be assigned to a continent, while some of their pixels in the terrain.bmp are for oceans/in the TERRAIN_DICTIONARY, while other provinces are assigned as ocean or lake in the default.map file, but have pixels that are not according to the TERRAIN_DICTIONARY. The province IDs with such wrong pixels will be shown regardless of whether this option is False or True, but setting this option to True will also show all individual wrong pixels, which can easily cause tens of thousands of lines mentioning wrong pixels.
 	"DATES_AFTER_START_DATE":True, # If you only care about mistakes that happen until the START_DATE, set this to False.
@@ -280,7 +282,9 @@ def get_cultures():
 def get_religions():
 	religion_dictionary = dict()
 	religion_set = set()
-	COLOR_STRUCTURE = re.compile(r'(?=( color = \{ [0-1]{0,1}["."]{0,1}[0-9]{1,3} [0-1]{0,1}["."]{0,1}[0-9]{1,3} [0-1]{0,1}["."]{0,1}[0-9]{1,3} \} ))')
+	COLOR_STRUCTURE = re.compile(r' color = \{ [0-1][.][0-9]{1,3} [0-1][.][0-9]{1,3} [0-1][.][0-9]{1,3} \}')
+	OPTIONAL_COLOR_STRUCTURE = re.compile(r' color = \{ [0-9]{1,3} [0-9]{1,3} [0-9]{1,3} \}')
+	MIXED_COLOR_STRUCTURE = re.compile(r'(?: color = \{ [0-1][.][0-9]{1,3} [0-1][.][0-9]{1,3} [0-1][.][0-9]{1,3} \})|(?: color = \{ [0-9]{1,3} [0-9]{1,3} [0-9]{1,3} \})')
 	ICON_STRUCTURE = re.compile(r'(?=( icon = [0-9]{1,3} ))')
 	for root, dirs, files in os.walk("common\\religions\\"):
 		for file in files:
@@ -290,13 +294,34 @@ def get_religions():
 				print(f"The file {path} is either empty or has only comments in it, why not remove it?")
 				continue
 			colors = re.findall(COLOR_STRUCTURE,text)
+			optional_colors = re.findall(OPTIONAL_COLOR_STRUCTURE,text)
+			mixed_colors = set()
 			icons = re.findall(ICON_STRUCTURE,text)
-			if len(colors) != len(icons):
-				print('A different number of "icon = ?" and " color = { ? ? ? }" strings has been found in ' + f"{path}, specifically the icons:\n{icons}\nand colors:\n{colors}")
-				return [dict(),set()]
+			if not (len(colors) == len(icons) or len(optional_colors) == len(icons)):
+				if len(optional_colors) == 0:
+					print('A different number of "icon = ?" and " color = { ? ? ? }" strings has been found in ' + f"{path}, specifically the icons:\n{icons}\nand colors:\n{colors}")
+					return set()
+				elif len(colors) == 0:
+					print('A different number of "icon = ?" and " color = { ? ? ? }" strings has been found in ' + f"{path}, specifically the icons:\n{icons}\nand colors:\n{optional_colors}")
+					return set()
+				elif len(colors) + len(optional_colors) == len(icons):
+					print(f"The color scheme is mixed, so some colors use the range from 0 to 1, while others are from 0 to 255 in {path}, you need to choose one scheme and convert the other:\n{colors}\nand:\n{optional_colors}")
+					mixed_colors = re.findall(MIXED_COLOR_STRUCTURE,text)
+					if len(mixed_colors) != len(icons):
+						print(f"Please report that the mixed regex for religion colors is wrong, either as github issue or in the OpenVic discord.")
+						return set()
+					else:
+						colors = mixed_colors
+				else:
+					print(f"The color scheme is mixed and the number of found icons does not match the colors as well in {path}, specifically the icons:\n{icons}\nand colors:\n{colors}\nand:\n{optional_colors}")
+					return set()
+			elif colors or optional_colors:
+				print(f"When the colors for one scheme fit the number of icons, there should be none for the other in {path}:\n{colors}\nand:\n{optional_colors}")
+				if len(optional_colors) == len(icons):
+					colors = optional_colors
 			if text.find("{") < 5:
 				print(f"{path} should start with a religious group, but the first bracket comes too soon.")
-				return [dict(),set()]
+				return set()
 			last_closing_bracket = -1
 			counter = 0
 			religion_group = religion = ""
@@ -310,7 +335,7 @@ def get_religions():
 						if counter == 0:
 							if ( k - last_closing_bracket ) < 6:
 								print(f"When not inside brackets the first thing afterwards should be a religious group, but the first opening bracket in {path} comes too soon.")
-								return [dict(),set()]
+								return set()
 							if text[k-3:k] == " = ":
 								religion_group = text[:k-3].rsplit(" ",maxsplit=1)[1]
 								if religion_group in religion_dictionary:
@@ -339,7 +364,7 @@ def get_religions():
 						counter -= 1
 						if counter < 2:
 							print(f"The religion {religion} lacks a color or an icon.")
-							return [dict(),set()]
+							return set()
 				if religion in religion_dictionary[religion_group]:
 					print(f"Duplicate religion {religion} in religious group {religion_group} in {path}")
 				else:
@@ -347,7 +372,12 @@ def get_religions():
 					color = tuple(colors[i].split(" ")[4:7])
 					religion_dictionary[religion_group][religion] = dict()
 					religion_dictionary[religion_group][religion]["icon"] = icon
-					religion_dictionary[religion_group][religion]["color"] = color
+					if len(optional_colors) == len(icons):
+						if not all(0 <= int(RGB) < 256 for RGB in color):
+							print(f"The color {color} for religion {religion} in {path} is not valid.")
+					elif not mixed_colors:
+						if not all(0 <= float(RGB) <= 1 for RGB in color):
+							print(f"The color {color} for religion {religion} in {path} is not valid.")
 					if religion in religion_set:
 						print(f"Religion {religion} is in two different religious groups.")
 					else:
@@ -416,7 +446,7 @@ def get_tech_groups():
 # gets all the text from ?.?.? = { text } for a specified date, including further occurances of it and returns them, but adds " # " between them or returns "#" if either the date entry is empty or none is found or an error occurs.
 def get_date_text(text,date,path):
 	date_text = " "
-	next_date = re.search(r'[^-0-9]{1}' + date + " = {",text)
+	next_date = re.search(r'[^-0-9]' + date + " = {",text)
 	while "None" != str(next_date):
 		counter = 1
 		text = text[next_date.end():]
@@ -432,7 +462,7 @@ def get_date_text(text,date,path):
 		else:
 			print(f"There was no closing bracket after the date {date} in {path}")
 			return "#"
-		next_date = re.search(r'[^-0-9]{1}' + date + " = {",text)
+		next_date = re.search(r'[^-0-9]' + date + " = {",text)
 	date_text = " " + " ".join(date_text.split()) + " "
 	if date_text == "  ":
 		return "#"
@@ -448,7 +478,7 @@ def get_base_date_text(text,sorted_list,path):
 	for date in sorted_list:
 		if date == "BASE_DATE" or date == "START_DATE":
 			continue
-		next_date = re.search(r'[^-0-9]{1}' + date + " = {",text)
+		next_date = re.search(r'[^-0-9]' + date + " = {",text)
 		while str(next_date) != "None":
 			prior_text = text[:next_date.start() + 1]
 			leftover = text[next_date.end():]
@@ -465,7 +495,7 @@ def get_base_date_text(text,sorted_list,path):
 				print(f"There was no closing bracket after the date {date} in {path}")
 				return "#"
 			text = prior_text + " ## " + leftover
-			next_date = re.search(r'[^-0-9]{1}' + date + " = {",text)
+			next_date = re.search(r'[^-0-9]' + date + " = {",text)
 	text = " " + " ".join(text.split()) + " "
 	if text == "  ":
 		return "#"
@@ -561,7 +591,7 @@ def check_country_files():
 				continue
 			path = os.path.join(root, file)
 			text = format_text_in_path(path)
-			for character in [" monarch = {"," queen = {"," heir = {"]:
+			for character in [" monarch = {"," queen = {"," heir = {"," define_advisor = {"]:
 				text = remove_text_between_brackets(text,character,path)
 			sorted_list = get_sorted_dates(text,path)
 			uniques = [[" government = ",""],[" primary_culture = ",""],[" religion = ",""],[" capital = ",""],[" technology_group = ",""]]
@@ -584,7 +614,7 @@ def check_country_files():
 				if date_text == "#":
 					continue
 				for index in range(len(uniques)):
-					if DONT_IGNORE_ISSUE["MISSING_EMPTY_SPACE"] and str(re.search(r'[^ _a-zA-Z]{1}' + uniques[index][0].strip(),date_text)) != "None":
+					if DONT_IGNORE_ISSUE["MISSING_EMPTY_SPACE"] and str(re.search(r'[^ _a-zA-Z]' + uniques[index][0].strip(),date_text)) != "None":
 						print(f'"{uniques[index][0].strip()}" entry may not be recognised as it does not have an empty space in front of it in {path}')
 					counter = date_text.count(uniques[index][0])
 					if counter > 1:
@@ -681,7 +711,7 @@ def check_country_files():
 			if tag_dictionary[tag] == "No path":
 				tags_without_path.append(tag)
 		print(f"No path has been set in common\\country_tags for these tags from history\\countries: {tags_without_path}")
-	COLOR_STRUCTURE = re.compile(r'(?=( color = \{ [0-9]{1,3} [0-9]{1,3} [0-9]{1,3} \} ))')
+	COLOR_STRUCTURE = re.compile(r" color = \{ (-?\d+) (-?\d+) (-?\d+) \}")
 	for root, dirs, files in os.walk("common\\countries\\"):
 		for file in files:
 			if file not in path_dictionary:
@@ -691,6 +721,8 @@ def check_country_files():
 			colors = re.findall(COLOR_STRUCTURE,text)
 			if len(colors) != 1:
 				print(f"The country in {path} has either no color or multiple.")
+			elif not all(0 <= int(RGB) < 256 for RGB in colors[0]):
+				print(f"The color for country in {path} is invalid {colors[0]}.")
 			if text.count(" graphical_culture =") != 1:
 				print(f"The country in {path} has either no graphical culture or multiple.")
 	missing_paths = []
@@ -750,7 +782,7 @@ def check_terrain():
 			if current_terrain_text.count(terrain_modifier) == 1:
 				terrain_modifier_value = current_terrain_text.split(terrain_modifier,maxsplit=1)[1].split(" ",maxsplit=1)[0]
 				if terrain_modifier == " supply_limit = ":
-					if not (re.fullmatch("[1-9][0-9]{0,1}",terrain_modifier_value) or re.fullmatch("[1-9][0-9]{0,1}[.][0-9]{0,2}",terrain_modifier_value)):
+					if not (re.fullmatch("[1-9][0-9]?",terrain_modifier_value) or re.fullmatch("[1-9][0-9]?[.][0-9]{0,2}",terrain_modifier_value)):
 						print(f"The{terrain_modifier}{terrain_modifier_value} for the terrain {current_terrain} might be incorrect.")
 				elif terrain_modifier == " movement_cost = ":
 					if not (re.fullmatch("[1-9]",terrain_modifier_value) or re.fullmatch("[0-9][.][0-9]{0,3}",terrain_modifier_value)):
@@ -758,12 +790,12 @@ def check_terrain():
 					elif float(terrain_modifier_value) == 0:
 						print(f"The{terrain_modifier}{terrain_modifier_value} for the terrain {current_terrain} should not be 0.")
 				elif terrain_modifier == " combat_width = ":
-					if not re.fullmatch("[-][0][.][0-9]{0,2}",terrain_modifier_value):
+					if not re.fullmatch("-[0][.][0-9]{0,2}",terrain_modifier_value):
 						print(f"The{terrain_modifier}{terrain_modifier_value} for the terrain {current_terrain} might be incorrect.")
 					elif float(terrain_modifier_value) < -0.8:
 						print(f"The{terrain_modifier}{terrain_modifier_value} for the terrain {current_terrain} is very small.")
 				elif terrain_modifier == " defence = ":
-					if not re.fullmatch("[-]{0,1}[1-6]",terrain_modifier_value):
+					if not re.fullmatch("-?[0-6]",terrain_modifier_value):
 						print(f"The{terrain_modifier}{terrain_modifier_value} for the terrain {current_terrain} might be incorrect.")
 			elif current_terrain_text.count(terrain_modifier) > 1:
 				print(f"The terrain {current_terrain} has multiple{terrain_modifier}occurances.")
@@ -910,7 +942,7 @@ def check_date_entries(text,sorted_list,path):
 								print(f"base_production {unique} in {path} is not an integer")
 							if index == 7:
 								print(f"base_manpower {unique} in {path} is not an integer")
-			if DONT_IGNORE_ISSUE["MISSING_EMPTY_SPACE"] and str(re.search(r'[^ _a-zA-Z]{1}' + uniques[index][0].strip(),date_text)) != "None":
+			if DONT_IGNORE_ISSUE["MISSING_EMPTY_SPACE"] and str(re.search(r'[^ _a-zA-Z]' + uniques[index][0].strip(),date_text)) != "None":
 				print(f"{uniques[index][0].strip()} entry may not be recognised as it does not have an empty space in front of it in {path}")
 		added_cores = []
 		removed_cores = []
@@ -1037,6 +1069,21 @@ def check_continents(province_set,empty_province_files_set):
 		elif int(max_provinces) >= 65536:
 			print(f"OpenVic does not yet support more than 65536 provinces and this script will mention a lot of false positives, if there are more unique colors in the province.bmp.")
 	[DEFINITIONS_DICTIONARY,RGB_DICTIONARY] = check_definition_csv()
+	tiny_province_color_set = set()
+	for count, color in image.getcolors(65536):
+		if MIN_PROVINCE_SIZE > count:
+			tiny_province_color_set.add(color)
+			if count == 1:
+				print(f"The province with color {color} has only 1 pixel.")
+			else:
+				print(f"The province with color {color} has only {count} pixels.")
+		if MAX_PROVINCE_SIZE < count:
+			print(f"The province with color {color} has {count} pixels, which could cause problems in V2, though feel free to ignore this until you actually see it cause problems at which point the province simply needs to be split into multiple smaller ones.")
+	if tiny_province_color_set:
+		for x in range(w):
+			for y in range(h):
+				if load_province_bmp[x,y] in tiny_province_color_set:
+					print(f"The pixel {x},{y} with color {load_province_bmp[x,y]} belongs to a tiny province.")
 	province_colors_are_in_definition_csv = True
 	if pixel_set.difference(RGB_DICTIONARY.keys()):
 		province_colors_are_in_definition_csv = False
@@ -1665,7 +1712,7 @@ else:
 	GOVERNMENT_SET = get_governments()
 	TECH_GROUP_SET = get_tech_groups()
 	if CULTURE_SET and RELIGION_SET and GOVERNMENT_SET and TECH_GROUP_SET:
-		DATE_STRUCTURE = re.compile(r'[^-0-9]{1}[-]{0,1}[0-9]{1,5}["."][0-9]{1,2}["."][0-9]{1,2} = {')
+		DATE_STRUCTURE = re.compile(r'[^-0-9]-?[0-9]{1,5}[.][0-9]{1,2}[.][0-9]{1,2} = {')
 		[TAG_SET,CAPITAL_DICTIONARY] = check_country_files()
 		[PROVINCE_TERRAIN_DICTIONARY, TERRAIN_OVERRIDE_PROVINCES] = check_terrain()
 		check_province_files()
