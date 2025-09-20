@@ -34,6 +34,7 @@ DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output file
 	"REMOVE_NON_EXISTANT_CULTURE":True, # Sometimes cultures are removed as accepted cultures, even though they were not accepted at this date. So maybe some other culture was actually supposed to be removed.
 	"MISSING_PROVINCE_FILE":True, # Some provinces may be placed on a continent or such, but lack a province file, can be ignored as an empty "provinceID.txt" file will simply be generated anyway for the output.
 	"MISSING_PROVINCE_ID":True, # While it is not necessary to use all numbers between 1 and the number of provinces as IDs, maybe you still want to add empty files for such cases, if not you can set it to False.
+	"OCEAN_AND_LAKE_CLIMATE":False, # In EU4 oceans and lakes can use climates to let them freeze during winter, but you may want to remove some not not needed ones.
 	"CITY_POSITION_OUTSIDE_BMP":False, # The position of the city could be outside the bmp, though this currently does not matter for conversion to a Victoria 2 mod.
 	"UNIT_POSITION_OUTSIDE_BMP":False, # The position of the unit could be outside the bmp, though this currently does not matter for conversion to a Victoria 2 mod.
 	"NAME_POSITION_OUTSIDE_BMP":False, # The position of the name could be outside the bmp, though this currently does not matter for conversion to a Victoria 2 mod.
@@ -1205,14 +1206,14 @@ def check_continents(province_set,empty_province_files_set):
 		for entry in provinces:
 			if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in province_set:
 				print(f"No province file with the ID {entry} exists, but the province has the climate: {climate_name}")
-			if entry in ocean:
+			if DONT_IGNORE_ISSUE["OCEAN_AND_LAKE_CLIMATE"] and entry in ocean:
 				print(f"Province {entry} is an ocean, but also has the climate {climate_name}.")
-			if entry in lakes:
+			if DONT_IGNORE_ISSUE["OCEAN_AND_LAKE_CLIMATE"] and entry in lakes:
 				print(f"Province {entry} is a lake, but also has the climate {climate_name}.")
 		if climate_name == "impassable":
 			impassable = provinces
 	if DONT_IGNORE_ISSUE["NO_TERRAIN_OVERRIDE"]:
-		leftover_provinces = combined_continent_set - TERRAIN_OVERRIDE_PROVINCES - ocean - lakes - impassable
+		leftover_provinces = combined_continent_set - TERRAIN_OVERRIDE_PROVINCES - ocean - lakes
 		if leftover_provinces:
 			print(f"The following provinces are continental and don't use terrain_override: {leftover_provinces}")
 	if impassable - empty_province_files_set:
