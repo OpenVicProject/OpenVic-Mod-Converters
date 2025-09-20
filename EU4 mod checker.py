@@ -443,6 +443,37 @@ def get_tech_groups():
 		print(f"There is no technology.txt file in the common folder.")
 	return tech_group_set
 
+def check_definition_csv():
+	not_more_than_once = True
+	definitions_dictionary = dict()
+	RGB_dictionary = dict()
+	with open("map\\definition.csv",'r',encoding=ENCODING,errors='replace') as file:
+		for line in file:
+			if re.fullmatch("[1-9]",line[0]):
+				[provinceID,red,green,blue] = line.split(";",maxsplit=4)[0:4]
+				if not re.fullmatch("[0-9]+",provinceID):
+					print(f"The province ID {provinceID} is not a valid number in map\\definition.csv")
+				elif provinceID in definitions_dictionary:
+					print(f"At least 2 lines start with the same number {provinceID} in map\\definition.csv")
+				elif not (re.fullmatch("[0-9]+",red) and re.fullmatch("[0-9]+",green) and re.fullmatch("[0-9]+",blue)):
+					print(f"One of the red, green or blue values is not a number in line {line.strip()} in map\\definition.csv")
+				elif not ((int(red) < 256) and (int(green) < 256) and (int(blue) < 256)):
+					print(f"The red, green and blue values have to be numbers from 0 to 255 in line {line.strip()} in map\\definition.csv")
+				else:
+					RGB = tuple((int(red),int(green),int(blue)))
+					if RGB in RGB_dictionary:
+						print(f"Another province was already assigned the same RGB value {RGB} as {provinceID} in map\\definition.csv")
+					else:
+						definitions_dictionary[provinceID] = RGB
+						RGB_dictionary[RGB] = int(provinceID)
+			elif not_more_than_once and (line[0] == "p"):
+				not_more_than_once = False
+			elif line[0] == "#":
+				pass
+			else:
+				print(f"In map\\definition.csv this line has to change or be removed: {line.strip()}")
+	return [definitions_dictionary,RGB_dictionary]
+
 # gets all the text from ?.?.? = { text } for a specified date, including further occurances of it and returns them, but adds " # " between them or returns "#" if either the date entry is empty or none is found or an error occurs.
 def get_date_text(text,date,path):
 	date_text = " "
@@ -1068,7 +1099,6 @@ def check_continents(province_set,empty_province_files_set):
 			print(f"The max_provinces value {max_provinces} in the map\\default.map should be at least 1 higher than the number of different colors in the province.bmp {len(pixel_set)}.")
 		elif int(max_provinces) >= 65536:
 			print(f"OpenVic does not yet support more than 65536 provinces and this script will mention a lot of false positives, if there are more unique colors in the province.bmp.")
-	[DEFINITIONS_DICTIONARY,RGB_DICTIONARY] = check_definition_csv()
 	tiny_province_color_set = set()
 	for count, color in image.getcolors(65536):
 		if MIN_PROVINCE_SIZE > count:
@@ -1220,37 +1250,6 @@ def check_area(combined_continent_set,lakes,impassable):
 	if combined_continent_set - area_province_set - impassable:
 		print(f"Some continental provinces are not in an area: {combined_continent_set - area_province_set - impassable}")
 	return area_set
-
-def check_definition_csv():
-	not_more_than_once = True
-	definitions_dictionary = dict()
-	RGB_dictionary = dict()
-	with open("map\\definition.csv",'r',encoding=ENCODING,errors='replace') as file:
-		for line in file:
-			if re.fullmatch("[1-9]",line[0]):
-				[provinceID,red,green,blue] = line.split(";",maxsplit=4)[0:4]
-				if not re.fullmatch("[0-9]+",provinceID):
-					print(f"The province ID {provinceID} is not a valid number in map\\definition.csv")
-				elif provinceID in definitions_dictionary:
-					print(f"At least 2 lines start with the same number {provinceID} in map\\definition.csv")
-				elif not (re.fullmatch("[0-9]+",red) and re.fullmatch("[0-9]+",green) and re.fullmatch("[0-9]+",blue)):
-					print(f"One of the red, green or blue values is not a number in line {line.strip()} in map\\definition.csv")
-				elif not ((int(red) < 256) and (int(green) < 256) and (int(blue) < 256)):
-					print(f"The red, green and blue values have to be numbers from 0 to 255 in line {line.strip()} in map\\definition.csv")
-				else:
-					RGB = tuple((int(red),int(green),int(blue)))
-					if RGB in RGB_dictionary:
-						print(f"Another province was already assigned the same RGB value {RGB} as {provinceID} in map\\definition.csv")
-					else:
-						definitions_dictionary[provinceID] = RGB
-						RGB_dictionary[RGB] = int(provinceID)
-			elif not_more_than_once and (line[0] == "p"):
-				not_more_than_once = False
-			elif line[0] == "#":
-				pass
-			else:
-				print(f"In map\\definition.csv this line has to change or be removed: {line.strip()}")
-	return [definitions_dictionary,RGB_dictionary]
 
 def check_positions(OCEAN_SET,LAKES_SET,IMPASSABLE_SET,pixel_set,DEFINITIONS_DICTIONARY):
 	unimportant = (0,0,0)
@@ -1711,6 +1710,7 @@ else:
 	RELIGION_SET = get_religions()
 	GOVERNMENT_SET = get_governments()
 	TECH_GROUP_SET = get_tech_groups()
+	[DEFINITIONS_DICTIONARY,RGB_DICTIONARY] = check_definition_csv()
 	if CULTURE_SET and RELIGION_SET and GOVERNMENT_SET and TECH_GROUP_SET:
 		DATE_STRUCTURE = re.compile(r'[^-0-9]-?[0-9]{1,5}[.][0-9]{1,2}[.][0-9]{1,2} = {')
 		[TAG_SET,CAPITAL_DICTIONARY] = check_country_files()
