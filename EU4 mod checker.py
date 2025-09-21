@@ -316,10 +316,12 @@ def get_religions():
 				else:
 					print(f"The color scheme is mixed and the number of found icons does not match the colors as well in {path}, specifically the icons:\n{icons}\nand colors:\n{colors}\nand:\n{optional_colors}")
 					return set()
-			elif colors or optional_colors:
+			elif colors and optional_colors:
 				print(f"When the colors for one scheme fit the number of icons, there should be none for the other in {path}:\n{colors}\nand:\n{optional_colors}")
 				if len(optional_colors) == len(icons):
 					colors = optional_colors
+			elif optional_colors:
+				colors = optional_colors
 			if text.find("{") < 5:
 				print(f"{path} should start with a religious group, but the first bracket comes too soon.")
 				return set()
@@ -1501,7 +1503,7 @@ def check_localisation(CONTINENT_NAME_SET,PROVINCE_SET,AREA_SET):
 		else:
 			localisation_dictionary[terrain] = 0
 		if terrain + "_desc" in localisation_dictionary:
-			print(f"The terrain {terrain} is already used for other localisation, maybe a culture, religion, area, government, continent, technology group or less likely a TAG, TAG_ADJ or PROV? already has the same name.")
+			print(f"The terrain description {terrain}_desc is already used for other localisation, maybe a culture, religion, area, government, continent, technology group or less likely a TAG, TAG_ADJ or PROV? already has the same name.")
 		else:
 			localisation_dictionary[terrain + "_desc"] = 0
 	THESE_KEYS_CAN_MISS = {"monarchy_name","theocracy_name","republic_name","native_name","tribal_name","europe","asia","africa","north_america","south_america","oceania","new_world"}
