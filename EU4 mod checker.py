@@ -912,8 +912,7 @@ def check_province_files():
 			for index in range(counter,province):
 				empty_province_files_set.add(index)
 			counter = province
-	check_continents(province_set,empty_province_files_set)
-	return
+	return [province_set,empty_province_files_set]
 
 # Checks if dates contain obvious mistakes like cultures that don't exist in the culture files.
 def check_date_entries(text,sorted_list,path):
@@ -1020,7 +1019,7 @@ def check_date_entries(text,sorted_list,path):
 				print(f"Invalid remove_core = {tag} found for {date} in {path}")
 	return is_empty
 
-def check_continents(province_set,empty_province_files_set):
+def check_continents():
 	text = format_text_in_path("map\\continent.txt")
 	continent_list = []
 	continent_name_set = set()
@@ -1037,7 +1036,7 @@ def check_continents(province_set,empty_province_files_set):
 		provinces = set(map(int,provinces.split()))
 		continent_list.append([continent_name,provinces])
 		for entry in provinces:
-			if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in province_set:
+			if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in PROVINCE_SET:
 				print(f"No province file with the ID {entry} exists, but the province is on the continent: {continent_name}")
 			for i in range(len(continent_list) - 1):
 				if entry in continent_list[i][1]:
@@ -1051,7 +1050,7 @@ def check_continents(province_set,empty_province_files_set):
 	ocean = text.split("sea_starts = {",maxsplit=1)[1].split("}",maxsplit=1)[0]
 	ocean = set(map(int,ocean.split()))
 	for entry in ocean:
-		if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in province_set:
+		if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in PROVINCE_SET:
 			print(f"No province file with the ID {entry} exists, but the province is an ocean province.")
 		if entry in combined_continent_set:
 			print(f"Province {entry} is already on a continent, but also an ocean.")
@@ -1059,13 +1058,13 @@ def check_continents(province_set,empty_province_files_set):
 	lakes = set(map(int,lakes.split()))
 	water_provinces = ocean.union(lakes)
 	for entry in lakes:
-		if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in province_set:
+		if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in PROVINCE_SET:
 			print(f"No province file with the ID {entry} exists, but the province is a lake province.")
 		if entry in combined_continent_set:
 			print(f"Province {entry} is already on a continent, but also a lake.")
 		if entry in ocean:
 			print(f"Province {entry} is already an ocean, but also a lake.")
-	leftover_provinces = province_set - combined_continent_set - ocean - lakes
+	leftover_provinces = PROVINCE_SET - combined_continent_set - ocean - lakes
 	if leftover_provinces:
 		print(f"Some provinces are neither a part of a continent, ocean or lake: {leftover_provinces}")
 	inland_ocean = lakes.copy()
@@ -1086,8 +1085,8 @@ def check_continents(province_set,empty_province_files_set):
 			if tag in CAPITAL_DICTIONARY:
 				if set(CAPITAL_DICTIONARY[tag]) - combined_continent_set:
 					print(f"At least one capital in the history of tag {tag} is not continental or the province simply does not exist: {set(CAPITAL_DICTIONARY[tag]) - combined_continent_set}.")
-	if water_provinces - empty_province_files_set:
-		print(f"These water provinces have some entries in their files: {water_provinces - empty_province_files_set}")
+	if water_provinces - EMPTY_PROVINCE_FILES_SET:
+		print(f"These water provinces have some entries in their files: {water_provinces - EMPTY_PROVINCE_FILES_SET}")
 	image = Image.open("map\\provinces.bmp")
 	w,h = image.size
 	load_province_bmp = image.load()
@@ -1206,7 +1205,7 @@ def check_continents(province_set,empty_province_files_set):
 		climate_name = climate_name.rsplit(" ",maxsplit=1)[1]
 		provinces = set(map(int,provinces.split()))
 		for entry in provinces:
-			if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in province_set:
+			if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in PROVINCE_SET:
 				print(f"No province file with the ID {entry} exists, but the province has the climate: {climate_name}")
 			if DONT_IGNORE_ISSUE["OCEAN_AND_LAKE_CLIMATE"] and entry in ocean:
 				print(f"Province {entry} is an ocean, but also has the climate {climate_name}.")
@@ -1218,15 +1217,11 @@ def check_continents(province_set,empty_province_files_set):
 		leftover_provinces = combined_continent_set - TERRAIN_OVERRIDE_PROVINCES - ocean - lakes
 		if leftover_provinces:
 			print(f"The following provinces are continental and don't use terrain_override: {leftover_provinces}")
-	if impassable - empty_province_files_set:
-		print(f"The following impassable provinces do not have empty province files: {impassable - empty_province_files_set}")
-	AREA_SET = check_area(combined_continent_set,lakes,impassable)
-	check_positions(ocean,lakes,impassable,pixel_set,DEFINITIONS_DICTIONARY)
-	province_set = combined_continent_set.union(province_set,water_provinces)
-	check_localisation(continent_name_set,province_set,AREA_SET)
-	return
+	if impassable - EMPTY_PROVINCE_FILES_SET:
+		print(f"The following impassable provinces do not have empty province files: {impassable - EMPTY_PROVINCE_FILES_SET}")
+	return [continent_name_set,combined_continent_set,ocean,lakes,impassable,pixel_set,water_provinces]
 
-def check_area(combined_continent_set,lakes,impassable):
+def check_area():
 	area_province_set = set()
 	area_set = set()
 	text = format_text_in_path("map\\area.txt")
@@ -1243,43 +1238,43 @@ def check_area(combined_continent_set,lakes,impassable):
 		for province in set(map(int,entry.split("}",maxsplit=1)[0].split())):
 			if province in area_province_set:
 				print(f"The province {province} is already in another area.")
-			elif province in impassable:
+			elif province in IMPASSABLE_SET:
 				print(f"The province {province} is impassable and should not be in an area.")
-			elif province in lakes:
+			elif province in LAKES_SET:
 				print(f"The province {province} is a lake and should not be in an area.")
 			else:
 				area_province_set.add(province)
 		area_name = entry.split("}",maxsplit=1)[1].strip()
-	if combined_continent_set - area_province_set - impassable:
-		print(f"Some continental provinces are not in an area: {combined_continent_set - area_province_set - impassable}")
+	if COMBINED_CONTINENT_SET - area_province_set - IMPASSABLE_SET:
+		print(f"Some continental provinces are not in an area: {COMBINED_CONTINENT_SET - area_province_set - IMPASSABLE_SET}")
 	return area_set
 
-def check_positions(OCEAN_SET,LAKES_SET,IMPASSABLE_SET,pixel_set,DEFINITIONS_DICTIONARY):
+def check_positions():
 	unimportant = (0,0,0)
-	if unimportant in pixel_set:
+	if unimportant in PIXEL_SET:
 		for b in range(256):
 			for g in range(256):
 				for r in range(6,256):
-					if (r,g,b) not in pixel_set:
+					if (r,g,b) not in PIXEL_SET:
 						unimportant = (r,g,b)
 						break
-				if unimportant not in pixel_set:
+				if unimportant not in PIXEL_SET:
 					break
-			if unimportant not in pixel_set:
+			if unimportant not in PIXEL_SET:
 				break
 	ocean = (0,0,1)
-	if ocean in pixel_set:
+	if ocean in PIXEL_SET:
 		for r in range(4):
 			for g in range(256):
 				for b in range(2,256):
-					if (r,g,b) not in pixel_set:
+					if (r,g,b) not in PIXEL_SET:
 						ocean = (r,g,b)
 						break
-				if ocean not in pixel_set:
+				if ocean not in PIXEL_SET:
 					break
-			if ocean not in pixel_set:
+			if ocean not in PIXEL_SET:
 				break
-	if unimportant == ocean or ocean in pixel_set or unimportant in pixel_set:
+	if unimportant == ocean or ocean in PIXEL_SET or unimportant in PIXEL_SET:
 		print(f'A mod with over 65536 Provinces wont work.')
 		return
 	OCEAN_RGB_SET = set()
@@ -1456,7 +1451,7 @@ def check_positions(OCEAN_SET,LAKES_SET,IMPASSABLE_SET,pixel_set,DEFINITIONS_DIC
 				print(f"The rounded port position {port_x},{h-1-port_y} for province {provinceID}, which would be {port_x},{port_y} in GIMP is neither a coastal nor an ocean pixel, if the province is not supposed to have a port, some stray pixel is somewhere next to an ocean.")
 	return
 
-def check_localisation(CONTINENT_NAME_SET,PROVINCE_SET,AREA_SET):
+def check_localisation():
 	localisation_dictionary = dict()
 	for tag in TAG_SET:
 		if tag not in {"REB","NAT","PIR"}:
@@ -1718,7 +1713,12 @@ else:
 		DATE_STRUCTURE = re.compile(r'[^-0-9]-?[0-9]{1,5}[.][0-9]{1,2}[.][0-9]{1,2} = {')
 		[TAG_SET,CAPITAL_DICTIONARY] = check_country_files()
 		[PROVINCE_TERRAIN_DICTIONARY, TERRAIN_OVERRIDE_PROVINCES] = check_terrain()
-		check_province_files()
+		[PROVINCE_SET,EMPTY_PROVINCE_FILES_SET] = check_province_files()
+		[CONTINENT_NAME_SET,COMBINED_CONTINENT_SET,OCEAN_SET,LAKES_SET,IMPASSABLE_SET,PIXEL_SET,WATER_PROVINCES_SET] = check_continents()
+		AREA_SET = check_area()
+		check_positions()
+		PROVINCE_SET = PROVINCE_SET.union(COMBINED_CONTINENT_SET,WATER_PROVINCES_SET)
+		check_localisation()
 		check_rivers()
 		check_gfx()
 	else:
