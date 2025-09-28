@@ -1,5 +1,6 @@
 #%%
 # Place this Python script into whatever mod folder you want to check. The mod needs to have the common\countries, common\country_tags, common\cultures, common\religions, common\governments, history\countries and history\provinces folders and map\area.txt, map\climate.txt, map\continent.txt, map\definition.csv and map\default.map files as well as the provinces.bmp, rivers.bmp and terrain.bmp. If those are not present, either because the mod uses the base game files or relies on another mod you have to copy them or can't use this script. If there are any DS_Store files they need to be removed.
+from collections import defaultdict
 from PIL import Image
 import re
 import os
@@ -35,6 +36,8 @@ DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output file
 	"MISSING_PROVINCE_FILE":True, # Some provinces may be placed on a continent or such, but lack a province file, can be ignored as an empty "provinceID.txt" file will simply be generated anyway for the output.
 	"MISSING_PROVINCE_ID":True, # While it is not necessary to use all numbers between 1 and the number of provinces as IDs, maybe you still want to add empty files for such cases, if not you can set it to False.
 	"OCEAN_AND_LAKE_CLIMATE":False, # In EU4 oceans and lakes can use climates to let them freeze during winter, but you may want to remove some not not needed ones.
+	"THROUGH_NOT_IN_OCEAN":False, # While not necessary you may want to set the adjacency type sea in map\adjacencies.csv to land, river or lake, if the Through province is not an ocean.
+	"CANAL_NOT_MUTUAL_NEIGHBOUR":False, # It is not necessary for a canal to be next to the From and To province, the Through province can even be the same as From or To, but maybe you want to know about such cases.
 	"CITY_POSITION_OUTSIDE_BMP":False, # The position of the city could be outside the bmp, though this currently does not matter for conversion to a Victoria 2 mod.
 	"UNIT_POSITION_OUTSIDE_BMP":False, # The position of the unit could be outside the bmp, though this currently does not matter for conversion to a Victoria 2 mod.
 	"NAME_POSITION_OUTSIDE_BMP":False, # The position of the name could be outside the bmp, though this currently does not matter for conversion to a Victoria 2 mod.
@@ -1124,16 +1127,25 @@ def check_continents():
 			for y in range(h):
 				if load_province_bmp[x,y] not in RGB_DICTIONARY:
 					print(f"The color at {x},{y} in the provinces.bmp is not in the map\\definition.csv")
+	adjacency_dictionary = defaultdict(set)
 	terrain = Image.open("map\\terrain.bmp").copy()
 	terrain_w,terrain_h = terrain.size
 	if terrain_w != w or terrain_h != h:
 		print(f"The width and/or height of the provinces.bmp {w},{h} and terrain.bmp {terrain_w},{terrain_h} are not equal, which also means it wont be checked whether some terrain pixels are ocean or not while the province itself is continental or not.")
 	else:
-		load_terrain_image = terrain.load()
 		wrong_water_terrain = set()
 		wrong_land_terrain = set()
 		WATER_INDEX = {TERRAIN_DICTIONARY["OCEAN_INDEX"],TERRAIN_DICTIONARY["INLAND_OCEAN_INDEX"]}
 		if province_colors_are_in_definition_csv:
+			for x in range(w):
+				for y in range(h):
+					for dx, dy in [(0,1),(1,0)]:
+						nx, ny = x + dx, y + dy
+						if 0 <= nx < w and 0 <= ny < h:
+							if load_province_bmp[x,y] != load_province_bmp[nx,ny]:
+								adjacency_dictionary[RGB_DICTIONARY[load_province_bmp[x,y]]].add(RGB_DICTIONARY[load_province_bmp[nx,ny]])
+								adjacency_dictionary[RGB_DICTIONARY[load_province_bmp[nx,ny]]].add(RGB_DICTIONARY[load_province_bmp[x,y]])
+			load_terrain_image = terrain.load()
 			for x in range(w):
 				for y in range(h):
 					if load_terrain_image[x,y] in WATER_INDEX:
@@ -1218,7 +1230,63 @@ def check_continents():
 			print(f"The following provinces are continental and don't use terrain_override: {leftover_provinces}")
 	if impassable - EMPTY_PROVINCE_FILES_SET:
 		print(f"The following impassable provinces do not have empty province files: {impassable - EMPTY_PROVINCE_FILES_SET}")
-	return [continent_name_set,combined_continent_set,ocean,lakes,impassable,pixel_set,water_provinces]
+	return [continent_name_set,combined_continent_set,ocean,lakes,impassable,pixel_set,water_provinces,adjacency_dictionary]
+
+def check_adjacencies():
+	csv_adjacency_dictionary = defaultdict(set)
+	with open("map\\adjacencies.csv",'r',encoding=ENCODING,errors='replace') as file:
+		for line in file:
+			if re.fullmatch("[1-9]",line[0]):
+				[From,To,Type,Through] = line.split(";",maxsplit=4)[0:4]
+				if not (re.fullmatch("[0-9]+",From) and re.fullmatch("[0-9]+",To) and (re.fullmatch("[0-9]+",Through) or Through == "-1")):
+					print(f"At least one of the province IDs {From} or {To} or {Through} contains something else than numbers, for example empty spaces are not allowed by my script, in map\\adjacencies.csv: {line.strip()}")
+					continue
+				elif From == To:
+					print(f"From and To are equal in map\\adjacencies.csv: {line.strip()}")
+					continue
+				From,To,Through = map(int,(From,To,Through))
+				if Type not in ["sea","","canal","land","lake","river"]:
+					print(f"Invalid adjacency type {Type}: {line.strip()}.")
+				elif Type == "sea":
+					if From not in COMBINED_CONTINENT_SET or To not in COMBINED_CONTINENT_SET:
+						print(f"The adjaceny type is sea, but {From} or {To} or both are not continental in map\\adjacencies.csv: {line.strip()}")
+					elif DONT_IGNORE_ISSUE["THROUGH_NOT_IN_OCEAN"] and (Through not in OCEAN_SET and Through != -1):
+						print((f"The adjaceny type is sea, but {Through} is neither an ocean nor -1 in map\\adjacencies.csv: {line.strip()}"))
+				elif Type == "land":
+					if From not in COMBINED_CONTINENT_SET or To not in COMBINED_CONTINENT_SET:
+						print(f"The adjaceny type is land, but {From} or {To} or both are not continental in map\\adjacencies.csv: {line.strip()}")
+					elif not(Through in COMBINED_CONTINENT_SET or Through in IMPASSABLE_SET) and Through != -1:
+						print((f"The adjaceny type is land, but {Through} is not continental or impassable in map\\adjacencies.csv: {line.strip()}"))
+				elif Type == "river":
+					if From not in COMBINED_CONTINENT_SET or To not in COMBINED_CONTINENT_SET:
+						print(f"The adjaceny type is river, but {From} or {To} or both are not continental in map\\adjacencies.csv: {line.strip()}")
+				elif Type != "canal":
+					if From not in COMBINED_CONTINENT_SET or To not in COMBINED_CONTINENT_SET:
+						print(f"The adjaceny type isn't canal, but {From} or {To} or both are not continental in map\\adjacencies.csv: {line.strip()}")
+				if From in IMPASSABLE_SET or From in LAKES_SET or To in IMPASSABLE_SET or To in LAKES_SET:
+					print(f"Either {From} or {To} or both are impassable/lake provinces in map\\adjacencies.csv: {line.strip()}")
+				elif (From not in COMBINED_CONTINENT_SET and From not in OCEAN_SET) or (To not in COMBINED_CONTINENT_SET and To not in OCEAN_SET):
+					print(f"Either {From} or {To} or both are neither continental nor ocean nor impassbable nor lake, in map\\adjacencies.csv: {line.strip()}")
+				elif (From in OCEAN_SET) != (To in OCEAN_SET):
+					print(f"{From} or {To} is ocean, but the other is not in map\\adjacencies.csv: {line.strip()}")
+				elif (From in COMBINED_CONTINENT_SET) != (To in COMBINED_CONTINENT_SET):
+					print(f"{From} or {To} is continental, but the other is not in map\\adjacencies.csv: {line.strip()}")
+				else:
+					if Through != -1 and not(From in ADJACENCY_DICTIONARY[Through] and To in ADJACENCY_DICTIONARY[Through]):
+						if Type != "canal" or DONT_IGNORE_ISSUE["CANAL_NOT_MUTUAL_NEIGHBOUR"]:
+							print(f"{From} or {To} or both are not next to {Through} in map\\provinces.bmp, if there are mutual neighbours they are {ADJACENCY_DICTIONARY[From].intersection(ADJACENCY_DICTIONARY[To])}: {line.strip()}")
+					if From in ADJACENCY_DICTIONARY[To]:
+						print(f"The provinces {From} and {To} are already adjacent due to neighbouring pixels: {line.strip()}")
+					if From in csv_adjacency_dictionary[To]:
+						print(f"The adjacency between {From} and {To} is added at least twice in map\\adjacencies.csv: {line.strip()}")
+					else:
+						csv_adjacency_dictionary[From].add(To)
+						csv_adjacency_dictionary[To].add(From)
+			elif line.strip() == "" or line.strip()[0] == "#" or line[0:6] == "-1;-1;" or line[0:8] == "From;To;":
+				pass
+			else:
+				print(f"In map\\adjacencies.csv this line has to change or will be ignored by the mod converter, as the first character is not a number from 1 to 9: {line.strip()}")
+	return
 
 def check_area():
 	area_province_set = set()
@@ -1713,7 +1781,8 @@ else:
 		[TAG_SET,CAPITAL_DICTIONARY] = check_country_files()
 		[PROVINCE_TERRAIN_DICTIONARY, TERRAIN_OVERRIDE_PROVINCES] = check_terrain()
 		[PROVINCE_SET,EMPTY_PROVINCE_FILES_SET] = check_province_files()
-		[CONTINENT_NAME_SET,COMBINED_CONTINENT_SET,OCEAN_SET,LAKES_SET,IMPASSABLE_SET,PIXEL_SET,WATER_PROVINCES_SET] = check_continents()
+		[CONTINENT_NAME_SET,COMBINED_CONTINENT_SET,OCEAN_SET,LAKES_SET,IMPASSABLE_SET,PIXEL_SET,WATER_PROVINCES_SET,ADJACENCY_DICTIONARY] = check_continents()
+		check_adjacencies()
 		AREA_SET = check_area()
 		check_positions()
 		PROVINCE_SET = PROVINCE_SET.union(COMBINED_CONTINENT_SET,WATER_PROVINCES_SET)
