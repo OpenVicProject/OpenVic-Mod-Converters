@@ -1,6 +1,7 @@
 #%%
 # YOU NEED TO RUN THE MOD CHECKER FIRST AND FIX ALL THE MISTAKES THAT CAN NOT BE DISABLED IN THE DONT_IGNORE_ISSUE PART OR THIS PROGRAM WILL LIKELY CRASH AS NEARLY ALL CHECKS ARE REMOVED! AND OF COURSE AFTER FIXING THE MISTAKES YOU NEED TO RUN THE MOD CHECKER AGAIN TO MAKE SURE YOU ACTUALLY FIXED ALL! THE "V2 mod standard" FOLDER FROM GITHUB MUST ALSO BE IN THE MOD FOLDER!
 
+from collections import defaultdict
 from PIL import Image
 import math
 import os
@@ -618,6 +619,44 @@ def create_climate_list():
 			impassable_set = provinces
 	return [climate_list,impassable_set]
 
+def create_adjacencies():
+	image = Image.open("map\\provinces.bmp")
+	w,h = image.size
+	load_province_bmp = image.load()
+	adjacency_dictionary = defaultdict(set)
+	for x in range(w):
+		for y in range(h):
+			for dx, dy in [(0,1),(1,0)]:
+				nx, ny = x + dx, y + dy
+				if 0 <= nx < w and 0 <= ny < h:
+					if load_province_bmp[x,y] != load_province_bmp[nx,ny]:
+						adjacency_dictionary[RGB_DICTIONARY[load_province_bmp[x,y]]].add(RGB_DICTIONARY[load_province_bmp[nx,ny]])
+						adjacency_dictionary[RGB_DICTIONARY[load_province_bmp[nx,ny]]].add(RGB_DICTIONARY[load_province_bmp[x,y]])
+	adjacency_list = list()
+	for province in COMBINED_IMPASSABLE_SET:
+		for adjacency in adjacency_dictionary[province]:
+			if int(province) < int(adjacency) or adjacency not in COMBINED_IMPASSABLE_SET:
+				adjacency_list.append(("impassable",int(province),int(adjacency),"0;0;"))
+	with open("map\\adjacencies.csv",'r',encoding=ENCODING,errors='replace') as file:
+		n = 1
+		for line in file:
+			if re.fullmatch("[1-9]",line[0]):
+				[From,To,Type,Through] = line.split(";",maxsplit=4)[0:4]
+				if From in COMBINED_IMPASSABLE_SET or To in COMBINED_IMPASSABLE_SET:
+					continue
+				From,To = int(From),int(To)
+				if Type == "canal":
+					adjacency_list.append(("canal",min(From,To),max(From,To),Through + ";" + str(n) + ";"))
+					n += 1
+				elif Through not in OCEAN_SET or Through in COMBINED_IMPASSABLE_SET:
+					adjacency_list.append(("land",min(From,To),max(From,To),"0;0;"))
+				elif str(From) in adjacency_dictionary[Through] and str(To) in adjacency_dictionary[Through]:
+					adjacency_list.append(("sea",min(From,To),max(From,To),Through + ";0;"))
+				else:
+					adjacency_list.append(("land",min(From,To),max(From,To),"0;0;"))
+	adjacency_list.sort()
+	return adjacency_list
+
 def create_state_list():
 	state_list = []
 	state_set = set()
@@ -1029,6 +1068,8 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 				PROVINCE_DICTIONARY[province] = dict()
 			PROVINCE_DICTIONARY[province]["continent"] = CONTINENT_LIST[index][0]
 	[CLIMATE_LIST,IMPASSABLE_SET] = create_climate_list()
+	COMBINED_IMPASSABLE_SET = IMPASSABLE_SET.union(LAKE_SET,FORCE_OCEAN_SET)
+	ADJACENCY_LIST = create_adjacencies()
 	PORT_POSITIONS = create_positions_list()
 	[STATE_LIST,STATE_SET] = create_state_list()
 	#V2_river_bmp = create_river_bmp()
@@ -1423,7 +1464,8 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 	output_path = os.getcwd() + "\\OpenVic\\map\\adjacencies.csv"
 	os.makedirs(os.path.dirname(output_path), exist_ok = True)
 	with open(output_path,"a",encoding=OUTPUT_ENCODING,newline='\n') as newfile:
-		pass
+		for adjacency in ADJACENCY_LIST:
+			newfile.write(str(adjacency[1]) + ";" + str(adjacency[2]) + ";" + adjacency[0] + ";" + adjacency[3] + "\n")
 	output_path = os.getcwd() + "\\OpenVic\\map\\climate.txt"
 	os.makedirs(os.path.dirname(output_path), exist_ok = True)
 	with open(output_path,"a",encoding=OUTPUT_ENCODING,newline='\n') as newfile:
