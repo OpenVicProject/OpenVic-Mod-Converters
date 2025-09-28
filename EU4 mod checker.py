@@ -625,7 +625,7 @@ def check_country_files():
 				continue
 			path = os.path.join(root, file)
 			text = format_text_in_path(path)
-			for character in [" monarch = {"," queen = {"," heir = {"," define_advisor = {"]:
+			for character in [" monarch = {"," monarch_consort = {"," monarch_heir = {"," monarch_foreign_heir = {"," queen = {"," heir = {"," define_advisor = {"," leader = {"]:
 				text = remove_text_between_brackets(text,character,path)
 			sorted_list = get_sorted_dates(text,path)
 			uniques = [[" government = ",""],[" primary_culture = ",""],[" religion = ",""],[" capital = ",""],[" technology_group = ",""]]
@@ -1163,17 +1163,16 @@ def check_continents():
 			rivers_w,rivers_h = rivers.size
 			if w != rivers_w or h != rivers_h:
 				print(f"The width and/or height of the provinces.bmp and the rivers.bmp are different.")
-			else:
-				if DONT_IGNORE_ISSUE["INCORRECT_TERRAIN"]:
-					load_rivers_bmp = rivers.load()
-					for x in range(w):
-						for y in range(h):
-							if load_rivers_bmp[x,y] > 253:
-								if load_terrain_image[x,y] in WATER_INDEX:
-									load_rivers_bmp[x,y] = 254
-								else:
-									load_rivers_bmp[x,y] = 255
-					rivers.save("map\\rivers2.bmp")
+			elif DONT_IGNORE_ISSUE["INCORRECT_TERRAIN"]:
+				load_rivers_bmp = rivers.load()
+				for x in range(w):
+					for y in range(h):
+						if load_rivers_bmp[x,y] > 253:
+							if load_terrain_image[x,y] in WATER_INDEX:
+								load_rivers_bmp[x,y] = 254
+							else:
+								load_rivers_bmp[x,y] = 255
+				rivers.save("map\\rivers2.bmp")
 				if DONT_IGNORE_ISSUE["COAST_NOT_COASTAL"]:
 					for x in range(w):
 						for y in range(h):

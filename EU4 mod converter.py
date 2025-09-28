@@ -298,6 +298,20 @@ def get_tech_groups():
 				break
 	return tech_group_set
 
+def create_definition_csv():
+	definition_csv = []
+	definitions_dictionary = dict()
+	RGB_dictionary = dict()
+	with open("map/definition.csv",'r',encoding=ENCODING,errors='replace') as file:
+		for line in file:
+			if re.fullmatch("[1-9]",line[0]):
+				[provinceID,red,green,blue] = line.split(";",maxsplit=4)[0:4]
+				definition_csv.append([provinceID,red,green,blue])
+				RGB = tuple((int(red),int(green),int(blue)))
+				definitions_dictionary[provinceID] = RGB
+				RGB_dictionary[RGB] = provinceID
+	return [definition_csv,definitions_dictionary,RGB_dictionary]
+
 # gets all the text from ?.?.? = { text } for a specified date, including further occurances of it and returns them, but adds " # " between them or returns "#" if either the date entry is empty or none is found or an error occurs.
 def get_date_text(text,date):
 	date_text = " "
@@ -407,9 +421,8 @@ def create_country_dictionary():
 				continue
 			path = os.path.join(root, file)
 			text = format_text_in_path(path)
-			text = remove_text_between_brackets(text," monarch = {")
-			text = remove_text_between_brackets(text," queen = {")
-			text = remove_text_between_brackets(text," heir = {")
+			for character in [" monarch = {"," monarch_consort = {"," monarch_heir = {"," monarch_foreign_heir = {"," queen = {"," heir = {"," define_advisor = {"," leader = {"]:
+				text = remove_text_between_brackets(text,character)
 			sorted_list = get_sorted_dates(text)
 			uniques = ["government","primary_culture","religion","capital","technology_group"]
 			accepted_culture_list = []
@@ -523,14 +536,8 @@ def create_province_dictionary():
 			elif terrain not in {"ocean","inland_ocean"}:
 				for province in PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"]:
 					full_province_dictionary[province]["terrain"] = terrain
-	[continent_list,ocean_set,water_province_set,max_provinces] = create_continent_list(force_ocean_set)
-	for index in range(len(continent_list)):
-		for province in continent_list[index][1]:
-			if province not in full_province_dictionary:
-				full_province_dictionary[province] = dict()
-			full_province_dictionary[province]["continent"] = continent_list[index][0]
 	# TODO add terrain specific life rating
-	return [full_province_dictionary,continent_list,ocean_set,water_province_set,max_provinces]
+	return [full_province_dictionary,force_ocean_set]
 
 # Checks if dates contain obvious mistakes like cultures that don't exist in the culture files.
 def get_province_data(text,sorted_list):
@@ -572,7 +579,7 @@ def get_province_data(text,sorted_list):
 				current_cores.remove(tag)
 	return dict() # This case should never happen, but just to be sure.
 
-def create_continent_list(force_ocean_set):
+def create_continent_list():
 	text = format_text_in_path("map/continent.txt")
 	continent_list = []
 	while text.__contains__("= {"):
@@ -582,7 +589,7 @@ def create_continent_list(force_ocean_set):
 			continue
 		if continent_name.strip() == "island_check_provinces":
 			continue
-		provinces = set(provinces.split()).difference(force_ocean_set) # TODO sort them
+		provinces = set(provinces.split()).difference(FORCE_OCEAN_SET) # TODO sort them
 		continent_list.append([continent_name.strip(),provinces])
 	if len(continent_list) > 6:
 		print("OpenVic only supports 6 continents in the UI, so while it will work when there are more, there wont be any functional buttons for them in some windows. Until support for this gets added, you will have to combine continents. Of course you can just generate the output and merge the continents there instead or ignore this problem.")
@@ -590,10 +597,26 @@ def create_continent_list(force_ocean_set):
 	max_provinces = text.split(" max_provinces = ",maxsplit=1)[1].split(" ",maxsplit=1)[0] # It seems any large enough number works
 	ocean_set = set(text.split("sea_starts = {",maxsplit=1)[1].split("}",maxsplit=1)[0].split())
 	continent_list.append(["ocean",ocean_set])
-	provinces = set(text.split("lakes = {",maxsplit=1)[1].split("}",maxsplit=1)[0].split())
-	water_province_set = ocean_set.union(provinces,force_ocean_set)
-	continent_list.append(["lakes",provinces.union(force_ocean_set - ocean_set)])
-	return [continent_list,ocean_set,water_province_set,max_provinces]
+	lake_set = set(text.split("lakes = {",maxsplit=1)[1].split("}",maxsplit=1)[0].split())
+	water_province_set = ocean_set.union(lake_set,FORCE_OCEAN_SET)
+	continent_list.append(["lakes",lake_set.union(FORCE_OCEAN_SET - ocean_set)])
+	return [continent_list,ocean_set,lake_set,water_province_set,max_provinces]
+
+def create_climate_list():
+	text = format_text_in_path("map/climate.txt")
+	climate_list = []
+	impassable_set = set()
+	while text.__contains__(" = {"):
+		[climate_name,text] = text.split(" = {",maxsplit=1)
+		[provinces,text] = text.split("}",maxsplit=1)
+		if provinces == " ":
+			continue
+		climate_name = climate_name.rsplit(" ",maxsplit=1)[1]
+		provinces = set(provinces.split())
+		climate_list.append([climate_name,provinces])
+		if climate_name == "impassable":
+			impassable_set = provinces
+	return [climate_list,impassable_set]
 
 def create_state_list():
 	state_list = []
@@ -611,34 +634,23 @@ def create_state_list():
 			state_list.append((area_name,state_provinces))
 			state_set.add(area_name)
 		area_name = entry.split("}",maxsplit=1)[1].strip()
-	return state_list,state_set
+	return [state_list,state_set]
 
 def create_positions_list():
-	definition_csv = []
-	definitions_dictionary = dict()
-	RGB_dictionary = dict()
-	with open("map/definition.csv",'r',encoding=ENCODING,errors='replace') as file:
-		for line in file:
-			if re.fullmatch("[1-9]",line[0]):
-				[provinceID,red,green,blue] = line.split(";",maxsplit=4)[0:4]
-				definition_csv.append([provinceID,red,green,blue])
-				RGB = tuple((int(red),int(green),int(blue)))
-				definitions_dictionary[provinceID] = RGB
-				RGB_dictionary[RGB] = provinceID
 	OCEAN_RGB_SET = set()
 	for provinceID in OCEAN_SET:
-		OCEAN_RGB_SET.add(definitions_dictionary[provinceID])
+		OCEAN_RGB_SET.add(DEFINITIONS_DICTIONARY[provinceID])
 	for color in OCEAN_RGB_SET:
 		ocean = color
 		break
 	UNIMPORTANT_RGB_SET = set()
 	for provinceID in WATER_PROVINCE_SET - OCEAN_SET:
-		UNIMPORTANT_RGB_SET.add(definitions_dictionary[provinceID])
+		UNIMPORTANT_RGB_SET.add(DEFINITIONS_DICTIONARY[provinceID])
 	for color in UNIMPORTANT_RGB_SET:
 		unimportant = color
 		break
 	for provinceID in IMPASSABLE_SET:
-		UNIMPORTANT_RGB_SET.add(definitions_dictionary[provinceID])
+		UNIMPORTANT_RGB_SET.add(DEFINITIONS_DICTIONARY[provinceID])
 	positions = format_text_in_path("map/positions.txt")
 	image = Image.open("map/provinces.bmp").copy()
 	w,h = image.size
@@ -726,7 +738,7 @@ def create_positions_list():
 	coastal_pixel_set = set(color for count, color in image.getcolors(65536)) - {ocean} - {unimportant}
 	coastal_province_set = set()
 	for color in coastal_pixel_set:
-		coastal_province_set.add(RGB_dictionary[color])
+		coastal_province_set.add(RGB_DICTIONARY[color])
 	positions = format_text_in_path("map/positions.txt")
 	port_positions = dict()
 	search_coast = [(1,0),(-1,0),(0,1),(0,-1),(1,1),(-1,1),(1,-1),(-1,-1),(2,0),(-2,0),(0,2),(0,-2),(2,1),(-2,1),(2,-1),(-2,-1),(1,2),(-1,2),(1,-2),(-1,-2),(2,2),(-2,2),(2,-2),(-2,-2)]
@@ -751,7 +763,7 @@ def create_positions_list():
 		if image_load[port_x,port_y] == ocean:
 			for dx,dy in search_coast:
 				if 0 <= port_x + dx < w and 0 <= port_y + dy < h:
-					if image_load[port_x + dx,port_y + dy] == definitions_dictionary[provinceID]:
+					if image_load[port_x + dx,port_y + dy] == DEFINITIONS_DICTIONARY[provinceID]:
 						port_x = port_x + dx
 						port_y = port_y + dy
 						break
@@ -789,23 +801,7 @@ def create_positions_list():
 			rotation = round(((math.atan2(dx,-dy) + 2.5 * math.pi) % (2 * math.pi)),6)
 			if rotation != 0:
 				port_positions[provinceID]["rotation"] = str(rotation)
-	return [definition_csv,RGB_dictionary,port_positions]
-
-def create_climate_list():
-	text = format_text_in_path("map/climate.txt")
-	climate_list = []
-	impassable_set = set()
-	while text.__contains__(" = {"):
-		[climate_name,text] = text.split(" = {",maxsplit=1)
-		[provinces,text] = text.split("}",maxsplit=1)
-		if provinces == " ":
-			continue
-		climate_name = climate_name.rsplit(" ",maxsplit=1)[1]
-		provinces = set(provinces.split())
-		climate_list.append([climate_name,provinces])
-		if climate_name == "impassable":
-			impassable_set = provinces
-	return [climate_list,impassable_set]
+	return port_positions
 
 def create_localisation_text():
 	TAG_ADJ_SET = set()
@@ -1021,13 +1017,20 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 	[RELIGION_DICTIONARY,RELIGION_SET] = get_religions()
 	GOVERNMENT_SET = get_governments()
 	TECH_GROUP_SET = get_tech_groups()
+	[DEFINITION_CSV,DEFINITIONS_DICTIONARY,RGB_DICTIONARY] = create_definition_csv()
 	DATE_STRUCTURE = re.compile(r'[^-0-9]-?[0-9]{1,5}[.][0-9]{1,2}[.][0-9]{1,2} = {')
 	[TAG_SET,TAG_DICTIONARY,COUNTRY_DICTIONARY,TECHNOLOGY_SET] = create_country_dictionary()
 	[PROVINCE_TERRAIN_DICTIONARY,TERRAIN_BMP_INDEX_DICTIONARY] = create_terrain_list()
-	[PROVINCE_DICTIONARY,CONTINENT_LIST,OCEAN_SET,WATER_PROVINCE_SET,MAX_PROVINCES] = create_province_dictionary()
+	[PROVINCE_DICTIONARY,FORCE_OCEAN_SET] = create_province_dictionary()
+	[CONTINENT_LIST,OCEAN_SET,LAKE_SET,WATER_PROVINCE_SET,MAX_PROVINCES] = create_continent_list()
+	for index in range(len(CONTINENT_LIST)):
+		for province in CONTINENT_LIST[index][1]:
+			if province not in PROVINCE_DICTIONARY:
+				PROVINCE_DICTIONARY[province] = dict()
+			PROVINCE_DICTIONARY[province]["continent"] = CONTINENT_LIST[index][0]
 	[CLIMATE_LIST,IMPASSABLE_SET] = create_climate_list()
-	[DEFINITION_CSV,RGB_DICTIONARY,PORT_POSITIONS] = create_positions_list()
-	STATE_LIST,STATE_SET = create_state_list()
+	PORT_POSITIONS = create_positions_list()
+	[STATE_LIST,STATE_SET] = create_state_list()
 	#V2_river_bmp = create_river_bmp()
 	#V2_river_bmp.save("rivers.bmp")
 	PROVINCE_SET = set(PROVINCE_DICTIONARY.keys())
