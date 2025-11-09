@@ -1205,7 +1205,7 @@ def check_continents():
 			if wrong_land_terrain:
 				print(f"If no map issues are mentioned above this message you can create the terrain.bmp and rivers.bmp files with correct pixels. Some terrain.bmp pixels are not water, but their provinces are ocean or lakes: {wrong_land_terrain}")
 		else:
-			print("Whether some Terrain pixels are water or not, while the province it belongs to is the other could not be checked due to colors in the provinces.bmp that are not in the definition.csv")
+			print("Whether some Terrain pixels are water or not, while the province it belongs to is the other could not be checked due to colors in the provinces.bmp that are not in the definition.csv and many adjacency issues will also not give a warning.")
 	text = format_text_in_path("map\\climate.txt")
 	impassable = set()
 	while text.__contains__(" = {"):
@@ -1224,6 +1224,11 @@ def check_continents():
 				print(f"Province {entry} is a lake, but also has the climate {climate_name}.")
 		if climate_name == "impassable":
 			impassable = provinces
+	if impassable:
+		for tag in TAG_SET:
+			if tag in CAPITAL_DICTIONARY:
+				if not set(CAPITAL_DICTIONARY[tag]).isdisjoint(impassable):
+					print(f"At least one capital in the history of tag {tag} is impassable: {set(CAPITAL_DICTIONARY[tag]).intersection(impassable)}.")
 	if DONT_IGNORE_ISSUE["NO_TERRAIN_OVERRIDE"]:
 		leftover_provinces = combined_continent_set - TERRAIN_OVERRIDE_PROVINCES - ocean - lakes
 		if leftover_provinces:
@@ -1257,9 +1262,6 @@ def check_adjacencies():
 						print(f"The adjaceny type is land, but {From} or {To} or both are not continental in map\\adjacencies.csv: {line.strip()}")
 					elif not(Through in COMBINED_CONTINENT_SET or Through in IMPASSABLE_SET) and Through != -1:
 						print((f"The adjaceny type is land, but {Through} is not continental or impassable in map\\adjacencies.csv: {line.strip()}"))
-				elif Type == "river":
-					if From not in COMBINED_CONTINENT_SET or To not in COMBINED_CONTINENT_SET:
-						print(f"The adjaceny type is river, but {From} or {To} or both are not continental in map\\adjacencies.csv: {line.strip()}")
 				elif Type != "canal":
 					if From not in COMBINED_CONTINENT_SET or To not in COMBINED_CONTINENT_SET:
 						print(f"The adjaceny type isn't canal, but {From} or {To} or both are not continental in map\\adjacencies.csv: {line.strip()}")
@@ -1271,7 +1273,7 @@ def check_adjacencies():
 					print(f"{From} or {To} is ocean, but the other is not in map\\adjacencies.csv: {line.strip()}")
 				elif (From in COMBINED_CONTINENT_SET) != (To in COMBINED_CONTINENT_SET):
 					print(f"{From} or {To} is continental, but the other is not in map\\adjacencies.csv: {line.strip()}")
-				else:
+				elif ADJACENCY_DICTIONARY:
 					if Through != -1 and not(From in ADJACENCY_DICTIONARY[Through] and To in ADJACENCY_DICTIONARY[Through]):
 						if Type != "canal" or DONT_IGNORE_ISSUE["CANAL_NOT_MUTUAL_NEIGHBOUR"]:
 							print(f"{From} or {To} or both are not next to {Through} in map\\provinces.bmp, if there are mutual neighbours they are {ADJACENCY_DICTIONARY[From].intersection(ADJACENCY_DICTIONARY[To])}: {line.strip()}")
