@@ -67,10 +67,7 @@ def format_text_in_path(path):
 			counter = text.count("�")
 			index = text.find("�")
 			mindex = max(0,index - 50)
-			if counter == 1:
-				print(f"1 character with wrong encoding found in file: {file.name} specifically � in:")
-			else:
-				print(f"{counter} characters with wrong encoding found in file: {file.name} specifically � for example in:")
+			print(f"{counter} character{'s' * (counter != 1)} with wrong encoding found in file: {file.name} specifically � in:")
 			print(text[mindex:index + 50])
 		if text.count("{") != text.count("}"): # TODO go through every character and count the bracketvalue
 			print(f"DONT IGNORE THIS: The number of opening and closing brackets in {path} is not equal.")
@@ -1108,10 +1105,7 @@ def check_continents():
 	for count, color in image.getcolors(65536):
 		if MIN_PROVINCE_SIZE > count:
 			tiny_province_color_set.add(color)
-			if count == 1:
-				print(f"The province with color {color} has only 1 pixel.")
-			else:
-				print(f"The province with color {color} has only {count} pixels.")
+			print(f"The province with color {color} has only {count} pixel{'s' * (count != 1)}.")
 		if MAX_PROVINCE_SIZE < count:
 			print(f"The province with color {color} has {count} pixels, which could cause problems in V2, though feel free to ignore this until you actually see it cause problems at which point the province simply needs to be split into multiple smaller ones.")
 	if tiny_province_color_set:
@@ -1246,10 +1240,10 @@ def check_adjacencies():
 				if not (re.fullmatch("[0-9]+",From) and re.fullmatch("[0-9]+",To) and (re.fullmatch("[0-9]+",Through) or Through == "-1")):
 					print(f"At least one of the province IDs {From} or {To} or {Through} contains something else than numbers, for example empty spaces are not allowed by my script, in map\\adjacencies.csv: {line.strip()}")
 					continue
-				elif From == To:
+				From,To,Through = map(int,(From,To,Through))
+				if From == To:
 					print(f"From and To are equal in map\\adjacencies.csv: {line.strip()}")
 					continue
-				From,To,Through = map(int,(From,To,Through))
 				if Type not in ["sea","","canal","land","lake","river"]:
 					print(f"Invalid adjacency type {Type}: {line.strip()}.")
 				elif Type == "sea":
@@ -1351,18 +1345,18 @@ def check_positions():
 		if str(provinceID) in DEFINITIONS_DICTIONARY:
 			OCEAN_RGB_SET.add(DEFINITIONS_DICTIONARY[str(provinceID)])
 		else:
-			print(f"The province ID {provinceID} is not found in the map\\definition.csv file, but it is an ocean.")
+			print(f"The province ID {provinceID} is not found in the map\\definition.csv file or it's color is already used by another province, but it is an ocean.")
 	UNIMPORTANT_RGB_SET = set()
 	for provinceID in LAKES_SET:
 		if str(provinceID) in DEFINITIONS_DICTIONARY:
 			UNIMPORTANT_RGB_SET.add(DEFINITIONS_DICTIONARY[str(provinceID)])
 		else:
-			print(f"The province ID {provinceID} is not found in the map\\definition.csv file, but it is a lake.")
+			print(f"The province ID {provinceID} is not found in the map\\definition.csv file or it's color is already used by another province, but it is a lake.")
 	for provinceID in IMPASSABLE_SET:
 		if str(provinceID) in DEFINITIONS_DICTIONARY:
 			UNIMPORTANT_RGB_SET.add(DEFINITIONS_DICTIONARY[str(provinceID)])
 		else:
-			print(f"The province ID {provinceID} is not found in the map\\definition.csv file, but it is impassable.")
+			print(f"The province ID {provinceID} is not found in the map\\definition.csv file or it's color is already used by another province, but it is impassable.")
 	positions = format_text_in_path("map\\positions.txt")
 	image_load_original = Image.open("map\\provinces.bmp").load()
 	image = Image.open("map\\provinces.bmp").copy()
@@ -1482,7 +1476,7 @@ def check_positions():
 			print(f"The port position {port_x},{port_y} for province {provinceID} is outside the provinces.bmp with size {w},{h}.")
 			continue
 		if provinceID not in DEFINITIONS_DICTIONARY:
-			print(f"The province ID {provinceID} is not found in the map\\definition.csv file, but a position for it exists.")
+			print(f"The province ID {provinceID} is not found in the map\\definition.csv file or it's color is already used by another province, but a position for it exists.")
 			continue
 		if DONT_IGNORE_ISSUE["CITY_POSITION"] and city_x != -1 and city_y != -1:
 			if image_load_original[int(float(city_x)),int(h-1 - float(city_y))] != DEFINITIONS_DICTIONARY[provinceID]:
