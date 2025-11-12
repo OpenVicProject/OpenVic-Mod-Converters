@@ -271,12 +271,9 @@ def get_cultures():
 					print(f'The culture {culture} is in at least 2 different culture groups.')
 				else:
 					culture_set.add(culture)
-				if "male_names" not in culture_dictionary[culture_group][culture] and "male_names" not in culture_dictionary[culture_group]["standard_names"]:
-					print(f"Culture {culture} in culture group {culture_group} has neither a male names list nor does the culture group have a default male names list.")
-				if "female_names" not in culture_dictionary[culture_group][culture] and "female_names" not in culture_dictionary[culture_group]["standard_names"]:
-					print(f"Culture {culture} in culture group {culture_group} has neither a female names list nor does the culture group have a default female names list.")
-				if "dynasty_names" not in culture_dictionary[culture_group][culture] and "dynasty_names" not in culture_dictionary[culture_group]["standard_names"]:
-					print(f"Culture {culture} in culture group {culture_group} has neither a dynasty names list nor does the culture group have a default dynasty names list.")
+				for name_type in ["male_names","female_names","dynasty_names"]:
+					if name_type not in culture_dictionary[culture_group][culture] and name_type not in culture_dictionary[culture_group]["standard_names"]:
+						print(f"Culture {culture} in culture group {culture_group} has neither a {name_type} list nor does the culture group have a default {name_type} list.")
 	return culture_set
 
 # Creates a set and a dictionary of the religions from all files in the common\religions folder.
@@ -298,7 +295,7 @@ def get_religions():
 			optional_colors = re.findall(OPTIONAL_COLOR_STRUCTURE,text)
 			mixed_colors = set()
 			icons = re.findall(ICON_STRUCTURE,text)
-			if not (len(colors) == len(icons) or len(optional_colors) == len(icons)):
+			if len(colors) != len(icons) and len(optional_colors) != len(icons):
 				if len(optional_colors) == 0:
 					print('A different number of "icon = ?" and " color = { ? ? ? }" strings has been found in ' + f"{path}, specifically the icons:\n{icons}\nand colors:\n{colors}")
 					return set()
@@ -434,10 +431,11 @@ def get_tech_groups():
 			if text[i] == "{":
 				counter += 1
 				if counter == 2:
-					if text[:i].rsplit(" =",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1] in tech_group_set:
-						print(f"The technology group {text[:i].rsplit(" =",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1]} occurs twice in common\\technology.txt.")
+					technology_group = text[:i].rsplit(" =",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1]
+					if technology_group in tech_group_set:
+						print(f"The technology group {technology_group} occurs twice in common\\technology.txt.")
 					else:
-						tech_group_set.add(text[:i].rsplit(" =",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1])
+						tech_group_set.add(technology_group)
 			elif text[i] == "}":
 				counter -= 1
 				if counter == 0:
@@ -618,7 +616,7 @@ def check_country_files():
 					print(f"Duplicate tag found in history\\countries: {tag}")
 				else:
 					tag_dictionary[tag] = "No path"
-					if tag == "REB" or tag == "NAT" or tag == "PIR":
+					if tag in ["REB","NAT","PIR"]:
 						continue
 			else:
 				print(f"Filename does not start with a valid country tag: {file}")
@@ -673,9 +671,9 @@ def check_country_files():
 								capital_dictionary[tag].append(int(uniques[index][1]))
 							else:
 								print(f"The capital {uniques[index][1]} in {path} is not a number.")
-						elif index == 3:
+						elif index == 4:
 							if uniques[index][1] not in TECH_GROUP_SET:
-								print(f"Technology group {uniques[index][1]} in {path} was not found in the common\\religions files")
+								print(f"Technology group {uniques[index][1]} in {path} was not found in common\\technology.txt")
 								uniques[index][1] = ""
 				added_accepted_culture_list = []
 				removed_accepted_culture_list = []
@@ -793,7 +791,7 @@ def check_terrain():
 		province_terrain_dictionary[current_terrain] = dict()
 		terrain_list.remove(terrain_list[0])
 		current_terrain_text_list = []
-		while terrain_list[0].rsplit(" ",maxsplit=1)[1] in {"color","terrain_override"}:
+		while terrain_list[0].rsplit(" ",maxsplit=1)[1] in ["color","terrain_override"]:
 			if terrain_list[0].rsplit(" ",maxsplit=1)[1] == "color":
 				if "color" in province_terrain_dictionary[current_terrain]:
 					print(f"The terrain {current_terrain} has at least 2 colors.")
@@ -886,22 +884,19 @@ def check_province_files():
 			if not re.fullmatch("[1-9]",file[0]):
 				print(f"Province file name does not start with a number from 1 to 9 in {path}")
 				continue
-			province_ID = ""
-			while re.fullmatch("[0-9]",file[0]):
-				province_ID += file[0]
-				file = file[1:]
-			if int(province_ID) not in province_set:
-				province_set.add(int(province_ID))
+			province_ID = int(re.match("[0-9]+", file).group())
+			if province_ID not in province_set:
+				province_set.add(province_ID)
 			else:
 				print(f'At least 2 files have the same province ID "{province_ID}" in history\\provinces.')
 			text = format_text_in_path(path)
 			if text == "  ":
-				empty_province_files_set.add(int(province_ID))
+				empty_province_files_set.add(province_ID)
 				continue
 			sorted_list = get_sorted_dates(text,path)
 			province_is_empty = check_date_entries(text,sorted_list,path)
 			if province_is_empty:
-				empty_province_files_set.add(int(province_ID))
+				empty_province_files_set.add(province_ID)
 	province_tuple = tuple(sorted(province_set, key=int))
 	counter = 0
 	for province in province_tuple:
@@ -916,7 +911,7 @@ def check_province_files():
 
 # Checks if dates contain obvious mistakes like cultures that don't exist in the culture files.
 def check_date_entries(text,sorted_list,path):
-	uniques = [[" culture = ",0],[" religion = ",0],[" owner = ",0],[" controller = ",0],[" trade_goods = ",0],[" base_tax = ",0],[" base_production = ",0],[" base_manpower = ",0]]
+	unique_dictionary = {" culture = ":0," religion = ":0," owner = ":0," controller = ":0," trade_goods = ":0," base_tax = ":0," base_production = ":0," base_manpower = ":0}
 	current_cores = []
 	added_cores = []
 	removed_cores = []
@@ -925,13 +920,13 @@ def check_date_entries(text,sorted_list,path):
 		if date == "BASE_DATE":
 			date_text = get_base_date_text(text,sorted_list,path)
 		elif date == "START_DATE":
-			if uniques[0][1] != uniques[1][1]:
+			if unique_dictionary[" culture = "] != unique_dictionary[" religion = "]:
 				print(f"Only the culture or religion, but not both are present for the start date in {path}")
-			if uniques[2][1] != uniques[3][1]:
+			if unique_dictionary[" owner = "] != unique_dictionary[" controller = "]:
 				print(f"Province has only an owner or a controller, but not both at the start date in {path}")
-			if (uniques[2][1] == 1) and (uniques[4][1] == 0):
+			if (unique_dictionary[" owner = "] == 1) and (unique_dictionary[" trade_goods = "] == 0):
 				print(f"Province has an owner, but no trade good at the start date in {path}")
-			if (uniques[5][1] != uniques[6][1]) or (uniques[6][1] != uniques[7][1]):
+			if not (unique_dictionary[" base_tax = "] == unique_dictionary[" base_production = "] == unique_dictionary[" base_manpower = "]):
 				print(f"The province lacks 1 or 2 of the base tax, production or manpower at the start date in {path}")
 			if DONT_IGNORE_ISSUE["DATES_AFTER_START_DATE"]:
 				continue
@@ -940,43 +935,43 @@ def check_date_entries(text,sorted_list,path):
 			date_text = get_date_text(text,date,path)
 		if date_text == "#":
 			continue
-		for index in range(len(uniques)):
-			counter = date_text.count(uniques[index][0])
+		for unique_entry in unique_dictionary:
+			counter = date_text.count(unique_entry)
 			if counter > 1:
 				is_empty = False
-				print(f'"{uniques[index][0]}" found {counter} times for date {date} in {path}')
-				uniques[index][1] = 1
+				print(f'"{unique_entry}" found {counter} times for date {date} in {path}')
+				unique_dictionary[unique_entry] = 1
 			elif counter == 1:
 				is_empty = False
-				uniques[index][1] = 1
-				if index != 4:
-					unique = date_text.split(uniques[index][0],maxsplit=1)[1].split(" ",maxsplit=1)[0]
-					if index == 0:
+				unique_dictionary[unique_entry] = 1
+				if unique_entry != " trade_goods = ":
+					unique = date_text.split(unique_entry,maxsplit=1)[1].split(" ",maxsplit=1)[0]
+					if unique_entry == " culture = ":
 						if unique == "no_culture":
 							print(f"culture = no_culture will not generate pops. Found for date {date} in {path}")
 						elif unique not in CULTURE_SET:
 							print(f"Culture {unique} in {path} was not found in the common\\cultures files")
-					elif index == 1:
+					elif unique_entry == " religion = ":
 						if unique == "no_religion":
 								print(f"religion = no_religion will not generate pops. Found for date {date} in {path}")
 						elif unique not in RELIGION_SET:
 							print(f"Religion {unique} in {path} was not found in the common\\religions files")
-					elif index < 4:
+					elif unique_entry in [" owner = "," controller = "]:
 						if unique not in TAG_SET and unique != "---":
-							if index == 2:
+							if unique_entry == " owner = ":
 								print(f"Owner {unique} in {path} was not found in the history\\countries files")
 							else:
 								print(f"Controller {unique} in {path} was not found in the history\\countries files")
-					elif index > 4:
+					elif unique_entry in [" base_tax = "," base_production = "," base_manpower = "]:
 						if not re.fullmatch("[0-9]+",unique):
-							if index == 5:
+							if unique_entry == " base_tax = ":
 								print(f"base_tax {unique} in {path} is not an integer")
-							if index == 6:
+							elif unique_entry == " base_production = ":
 								print(f"base_production {unique} in {path} is not an integer")
-							if index == 7:
+							else:
 								print(f"base_manpower {unique} in {path} is not an integer")
-			if DONT_IGNORE_ISSUE["MISSING_EMPTY_SPACE"] and str(re.search(r'[^ _a-zA-Z]' + uniques[index][0].strip(),date_text)) != "None":
-				print(f"{uniques[index][0].strip()} entry may not be recognised as it does not have an empty space in front of it in {path}")
+			if DONT_IGNORE_ISSUE["MISSING_EMPTY_SPACE"] and str(re.search(r'[^ _a-zA-Z]' + unique_entry.strip(),date_text)) != "None":
+				print(f"{unique_entry.strip()} entry may not be recognised as it does not have an empty space in front of it in {path}")
 		added_cores = []
 		removed_cores = []
 		core_text = date_text
@@ -1041,9 +1036,7 @@ def check_continents():
 			for i in range(len(continent_list) - 1):
 				if entry in continent_list[i][1]:
 					print(f"Province {entry} is already on the continent {continent_list[i][0]}, but also on the continent {continent_name}")
-	combined_continent_set = provinces.copy()
-	for i in range(len(continent_list) - 1):
-		combined_continent_set = combined_continent_set.union(continent_list[i][1])
+	combined_continent_set = set().union(*(provinces for continent_name, provinces in continent_list))
 	if len(continent_list) > 6:
 		print("OpenVic only supports 6 continents in the UI, so while it will work when there are more, there wont be any functional buttons for them in some windows. Until support for this gets added, you will have to combine continents. Of course you can just generate the output and merge the continents there instead or ignore this problem.")
 	text = format_text_in_path("map\\default.map")
