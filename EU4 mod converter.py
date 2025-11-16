@@ -204,17 +204,17 @@ def get_cultures():
 					if name_string != "":
 						culture_dictionary[culture_group][culture][new_entry] = name_string.strip()
 				text = leftover
-	culture_set = set()
+	culture_list = []
 	for culture_group in culture_dictionary:
 		for culture in culture_dictionary[culture_group]:
 			if culture != "standard_names":
-				culture_set.add(culture)
-	return [culture_dictionary, culture_set]
+				culture_list.append(culture)
+	return [culture_dictionary, culture_list]
 
 # Creates a set and a dictionary of the religions from all files in the common/religions folder.
 def get_religions():
 	religion_dictionary = dict()
-	religion_set = set()
+	religion_list = []
 	COLOR_STRUCTURE = re.compile(r' color = \{ [0-1][.][0-9]{1,3} [0-1][.][0-9]{1,3} [0-1][.][0-9]{1,3} \}')
 	OPTIONAL_COLOR_STRUCTURE = re.compile(r' color = \{ [0-9]{1,3} [0-9]{1,3} [0-9]{1,3} \}')
 	ICON_STRUCTURE = re.compile(r' icon = [0-9]{1,3} ')
@@ -265,12 +265,12 @@ def get_religions():
 				religion_dictionary[religion_group][religion] = dict()
 				religion_dictionary[religion_group][religion]["icon"] = icon
 				religion_dictionary[religion_group][religion]["color"] = color
-				religion_set.add(religion)
+				religion_list.append(religion)
 				text = text[maxdex:]
-	return [religion_dictionary,religion_set]
+	return [religion_dictionary,religion_list]
 
 def get_governments():
-	government_set = set()
+	government_list = []
 	for root, dirs, files in os.walk("common/governments"):
 		for file in files:
 			text = format_text_in_path(os.path.join(root, file))
@@ -280,11 +280,11 @@ def get_governments():
 				next_government = text.split(" = {",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1]
 				text = remove_text_between_brackets(text," " + next_government + " = {")
 				if next_government != "pre_dharma_mapping":
-					government_set.add(next_government)
-	return government_set
+					government_list.append(next_government)
+	return government_list
 
 def get_tech_groups():
-	tech_group_set = set()
+	tech_group_list = []
 	text = format_text_in_path("common/technology.txt")
 	counter = 1
 	text = text.split(" groups = {",maxsplit=1)[1]
@@ -292,14 +292,17 @@ def get_tech_groups():
 		if text[i] == "{":
 			counter += 1
 			if counter == 2:
-				tech_group_set.add(text[:i].rsplit(" =",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1])
+				tech_group_list.append(text[:i].rsplit(" =",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1])
 		elif text[i] == "}":
 			counter -= 1
 			if counter == 0:
 				break
-	return tech_group_set
+	return tech_group_list
 
 def create_definition_csv():
+	image = Image.open("map\\provinces.bmp")
+	pixel_set = set(color for count, color in image.getcolors(65536))
+	provinces_on_the_map = set()
 	definition_csv = []
 	definitions_dictionary = dict()
 	RGB_dictionary = dict()
@@ -307,11 +310,14 @@ def create_definition_csv():
 		for line in file:
 			if re.fullmatch("[1-9]",line[0]):
 				[provinceID,red,green,blue] = line.split(";",maxsplit=4)[0:4]
-				definition_csv.append([provinceID,red,green,blue])
 				RGB = tuple((int(red),int(green),int(blue)))
+				if RGB not in pixel_set:
+					continue
+				definition_csv.append([provinceID,red,green,blue])
 				definitions_dictionary[provinceID] = RGB
 				RGB_dictionary[RGB] = provinceID
-	return [definition_csv,definitions_dictionary,RGB_dictionary]
+				provinces_on_the_map.add(provinceID)
+	return [definition_csv,definitions_dictionary,RGB_dictionary,provinces_on_the_map]
 
 # gets all the text from ?.?.? = { text } for a specified date, including further occurances of it and returns them, but adds " # " between them or returns "#" if either the date entry is empty or none is found or an error occurs.
 def get_date_text(text,date):
@@ -477,8 +483,8 @@ def create_country_dictionary():
 			colors = COLOR_STRUCTURE.search(text)
 			country_dictionary[path_dictionary[file]]["color"] = colors.group()[8:].strip()
 			country_dictionary[path_dictionary[file]]["graphical_culture"] = text.split(" graphical_culture = ",maxsplit=1)[1].split(" ",maxsplit=1)[0]
-	tag_set = set(tag_dictionary.keys())
-	return [tag_set,tag_dictionary,country_dictionary,technology_set]
+	tag_list = list(tag_dictionary.keys())
+	return [tag_list,tag_dictionary,country_dictionary,technology_set]
 
 def create_terrain_list():
 	text = format_text_in_path("map\\terrain.txt")
@@ -495,7 +501,9 @@ def create_terrain_list():
 		if last_word == "color":
 			province_terrain_dictionary[current_terrain]["color"] = terrain_list[1].split("}",maxsplit=1)[0]
 		elif last_word == "terrain_override":
-			province_terrain_dictionary[current_terrain]["terrain_override"] = set(terrain_list[1].split("}",maxsplit=1)[0].split())
+			provinces = set(terrain_list[1].split("}",maxsplit=1)[0].split()) & PROVINCES_ON_THE_MAP
+			provinces = tuple(sorted(provinces, key=int))
+			province_terrain_dictionary[current_terrain]["terrain_override"] = provinces
 		else:
 			current_terrain = last_word
 			province_terrain_dictionary[current_terrain] = dict()
@@ -520,11 +528,10 @@ def create_province_dictionary():
 	full_province_dictionary = dict()
 	for root, dirs, files in os.walk("history/provinces"):
 		for file in files:
+			province_ID = re.match("[0-9]+", file).group()
+			if province_ID not in PROVINCES_ON_THE_MAP:
+				continue
 			text = format_text_in_path(os.path.join(root, file))
-			province_ID = ""
-			while re.fullmatch("[0-9]",file[0]):
-				province_ID += file[0]
-				file = file[1:]
 			full_province_dictionary[province_ID] = dict()
 			sorted_list = get_sorted_dates(text)
 			province_dictionary = get_province_data(text,sorted_list)
@@ -533,8 +540,8 @@ def create_province_dictionary():
 	for terrain in PROVINCE_TERRAIN_DICTIONARY:
 		if "terrain_override" in PROVINCE_TERRAIN_DICTIONARY[terrain]:
 			if terrain in FORCE_OCEAN:
-				force_ocean_set = force_ocean_set.union(PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"])
-			elif terrain not in {"ocean","inland_ocean"}:
+				force_ocean_set = force_ocean_set.union(set(PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"]))
+			elif terrain not in ["ocean","inland_ocean"]:
 				for province in PROVINCE_TERRAIN_DICTIONARY[terrain]["terrain_override"]:
 					full_province_dictionary[province]["terrain"] = terrain
 	# TODO add terrain specific life rating
@@ -586,21 +593,22 @@ def create_continent_list():
 	while text.__contains__("= {"):
 		[continent_name,text] = text.split("= {",maxsplit=1)
 		[provinces,text] = text.split("}",maxsplit=1)
-		if provinces == " ":
+		provinces = set(provinces.split()).difference(FORCE_OCEAN_SET) & PROVINCES_ON_THE_MAP
+		if (not provinces) or continent_name.strip() == "island_check_provinces":
 			continue
-		if continent_name.strip() == "island_check_provinces":
-			continue
-		provinces = set(provinces.split()).difference(FORCE_OCEAN_SET) # TODO sort them
+		provinces = tuple(sorted(provinces, key=int))
 		continent_list.append([continent_name.strip(),provinces])
 	if len(continent_list) > 6:
 		print("OpenVic only supports 6 continents in the UI, so while it will work when there are more, there wont be any functional buttons for them in some windows. Until support for this gets added, you will have to combine continents. Of course you can just generate the output and merge the continents there instead or ignore this problem.")
 	text = format_text_in_path("map/default.map")
 	max_provinces = text.split(" max_provinces = ",maxsplit=1)[1].split(" ",maxsplit=1)[0] # It seems any large enough number works
-	ocean_set = set(text.split("sea_starts = {",maxsplit=1)[1].split("}",maxsplit=1)[0].split())
-	continent_list.append(["ocean",ocean_set])
-	lake_set = set(text.split("lakes = {",maxsplit=1)[1].split("}",maxsplit=1)[0].split())
+	ocean_set = set(text.split("sea_starts = {",maxsplit=1)[1].split("}",maxsplit=1)[0].split()) & PROVINCES_ON_THE_MAP
+	provinces = tuple(sorted(ocean_set, key=int))
+	continent_list.append(["ocean",provinces])
+	lake_set = set(text.split("lakes = {",maxsplit=1)[1].split("}",maxsplit=1)[0].split()) & PROVINCES_ON_THE_MAP
 	water_province_set = ocean_set.union(lake_set,FORCE_OCEAN_SET)
-	continent_list.append(["lakes",lake_set.union(FORCE_OCEAN_SET - ocean_set)])
+	provinces = tuple(sorted(lake_set.union(FORCE_OCEAN_SET - ocean_set), key=int))
+	continent_list.append(["lakes",provinces])
 	return [continent_list,ocean_set,lake_set,water_province_set,max_provinces]
 
 def create_climate_list():
@@ -610,13 +618,14 @@ def create_climate_list():
 	while text.__contains__(" = {"):
 		[climate_name,text] = text.split(" = {",maxsplit=1)
 		[provinces,text] = text.split("}",maxsplit=1)
-		if provinces == " ":
+		provinces = set(provinces.split()).difference(WATER_PROVINCE_SET) & PROVINCES_ON_THE_MAP
+		if not provinces:
 			continue
 		climate_name = climate_name.rsplit(" ",maxsplit=1)[1]
-		provinces = set(provinces.split())
-		climate_list.append([climate_name,provinces])
 		if climate_name == "impassable":
 			impassable_set = provinces
+		provinces = tuple(sorted(provinces, key=int))
+		climate_list.append([climate_name,provinces])
 	return [climate_list,impassable_set]
 
 def create_adjacencies():
@@ -659,21 +668,19 @@ def create_adjacencies():
 
 def create_state_list():
 	state_list = []
-	state_set = set()
+	state_name_list = []
 	text = format_text_in_path("map/area.txt")
 	text_list = text.split(" = {")
 	area_name = text_list[0].strip()
 	text_list.remove(text_list[0])
 	for entry in text_list:
-		state_provinces = []
-		for province in set(entry.split("}",maxsplit=1)[0].split()):
-			if province not in WATER_PROVINCE_SET:
-				state_provinces.append(province)
+		state_provinces = (set(entry.split("}",maxsplit=1)[0].split()) - WATER_PROVINCE_SET) & PROVINCES_ON_THE_MAP
 		if state_provinces:
+			state_provinces = sorted(state_provinces,key=int)
 			state_list.append((area_name,state_provinces))
-			state_set.add(area_name)
+			state_name_list.append(area_name)
 		area_name = entry.split("}",maxsplit=1)[1].strip()
-	return [state_list,state_set]
+	return [state_list,state_name_list]
 
 def create_positions_list():
 	OCEAN_RGB_SET = set()
@@ -840,32 +847,31 @@ def create_positions_list():
 			rotation = round(((math.atan2(dx,-dy) + 2.5 * math.pi) % (2 * math.pi)),6)
 			if rotation != 0:
 				port_positions[provinceID]["rotation"] = str(rotation)
+	port_positions = dict(sorted(port_positions.items(), key=lambda item: int(item[0])))
 	return port_positions
 
 def create_localisation_text():
-	TAG_ADJ_SET = set()
-	PROV_SET = set()
+	prov_list = []
 	localisation_dictionary = dict()
-	for tag in TAG_SET:
-		if tag not in {"REB","NAT","PIR"}:
+	for tag in TAG_LIST:
+		if tag not in ["REB","NAT","PIR"]:
 			localisation_dictionary[tag] = dict()
-			TAG_ADJ_SET.add(tag + "_ADJ")
 			localisation_dictionary[tag + "_ADJ"] = dict()
-	for state in STATE_SET:
+	for state in STATE_NAME_LIST:
 		localisation_dictionary[state] = dict()
-	for prov in PROVINCE_SET:
-		PROV_SET.add("PROV" + str(prov))
+	for prov in PROVINCE_DICTIONARY.keys():
+		prov_list.append("PROV" + str(prov))
 		localisation_dictionary["PROV" + str(prov)] = dict()
-	for culture in CULTURE_SET:
+	for culture in CULTURE_LIST:
 		localisation_dictionary[culture] = dict()
-	for religion in RELIGION_SET:
+	for religion in RELIGION_LIST:
 		localisation_dictionary[religion] = dict()
-	for tech_group in TECH_GROUP_SET:
+	for tech_group in TECH_GROUP_LIST:
 		localisation_dictionary[tech_group] = dict()
 	for terrain in set(PROVINCE_TERRAIN_DICTIONARY.keys()) - {"ocean","inland_ocean"}:
 		localisation_dictionary[terrain] = dict()
 		localisation_dictionary[terrain + "_desc"] = dict()
-	for government in GOVERNMENT_SET:
+	for government in GOVERNMENT_LIST:
 		if government + "_name" in EU4_LOCALISATION_DICTIONARY:
 			localisation_dictionary[government + "_name"] = EU4_LOCALISATION_DICTIONARY[government + "_name"]
 		else:
@@ -889,8 +895,7 @@ def create_localisation_text():
 									continue
 								value = value[value.find('"') + 1:value.rfind('"')].replace('\\"','"')
 								localisation_dictionary[key][language] = value
-	PROV_TUPLE = sorted(tuple(PROV_SET),key=str)
-	return localisation_dictionary,PROV_TUPLE
+	return [localisation_dictionary,prov_list]
 
 def create_river_bmp():
 	province_bmp = Image.open("map/provinces.bmp").transpose(Image.FLIP_TOP_BOTTOM)
@@ -1052,13 +1057,13 @@ def create_localisation_file(localisation_iterable,extension_list,file_name):
 
 if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 	START_DATE = verify_date(START_DATE)
-	[CULTURE_DICTIONARY,CULTURE_SET] = get_cultures()
-	[RELIGION_DICTIONARY,RELIGION_SET] = get_religions()
-	GOVERNMENT_SET = get_governments()
-	TECH_GROUP_SET = get_tech_groups()
-	[DEFINITION_CSV,DEFINITIONS_DICTIONARY,RGB_DICTIONARY] = create_definition_csv()
+	[CULTURE_DICTIONARY,CULTURE_LIST] = get_cultures()
+	[RELIGION_DICTIONARY,RELIGION_LIST] = get_religions()
+	GOVERNMENT_LIST = get_governments()
+	TECH_GROUP_LIST = get_tech_groups()
+	[DEFINITION_CSV,DEFINITIONS_DICTIONARY,RGB_DICTIONARY,PROVINCES_ON_THE_MAP] = create_definition_csv()
 	DATE_STRUCTURE = re.compile(r'[^-0-9]-?[0-9]{1,5}[.][0-9]{1,2}[.][0-9]{1,2} = {')
-	[TAG_SET,TAG_DICTIONARY,COUNTRY_DICTIONARY,TECHNOLOGY_SET] = create_country_dictionary()
+	[TAG_LIST,TAG_DICTIONARY,COUNTRY_DICTIONARY,TECHNOLOGY_SET] = create_country_dictionary()
 	[PROVINCE_TERRAIN_DICTIONARY,TERRAIN_BMP_INDEX_DICTIONARY] = create_terrain_list()
 	[PROVINCE_DICTIONARY,FORCE_OCEAN_SET] = create_province_dictionary()
 	[CONTINENT_LIST,OCEAN_SET,LAKE_SET,WATER_PROVINCE_SET,MAX_PROVINCES] = create_continent_list()
@@ -1071,12 +1076,11 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 	COMBINED_IMPASSABLE_SET = IMPASSABLE_SET.union(LAKE_SET,FORCE_OCEAN_SET)
 	ADJACENCY_LIST = create_adjacencies()
 	PORT_POSITIONS = create_positions_list()
-	[STATE_LIST,STATE_SET] = create_state_list()
+	[STATE_LIST,STATE_NAME_LIST] = create_state_list()
 	#V2_river_bmp = create_river_bmp()
 	#V2_river_bmp.save("rivers.bmp")
-	PROVINCE_SET = set(PROVINCE_DICTIONARY.keys())
-	LOCALISATION_DICTIONARY,PROV_TUPLE = create_localisation_text()
-	STATE_TUPLE = sorted(tuple(STATE_SET),key=str)
+	PROVINCE_DICTIONARY = dict(sorted(PROVINCE_DICTIONARY.items(), key=lambda item: int(item[0])))
+	[LOCALISATION_DICTIONARY,PROV_LIST] = create_localisation_text()
 	# TODO create starting armies from soldier pops
 	shutil.copytree("V2 mod standard","OpenVic")
 	for tag in COUNTRY_DICTIONARY:
@@ -1147,7 +1151,7 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 	output_path = os.getcwd() + "\\OpenVic\\common\\governments.txt"
 	os.makedirs(os.path.dirname(output_path), exist_ok = True)
 	with open(output_path,"a",encoding=OUTPUT_ENCODING,newline='\n') as newfile:
-		for government in GOVERNMENT_SET:
+		for government in GOVERNMENT_LIST:
 			newfile.write(government + " = {\n	fascist = yes\n	reactionary = yes\n	conservative = yes\n	socialist = yes\n	communist = yes\n	liberal = yes\n	anarcho_liberal = yes\n\n	election = no\n	appoint_ruling_party = yes\n}\n")
 		newfile.write("proletarian_dictatorship = {\n	communist = yes\n\n	election = no\n	appoint_ruling_party = yes\n}\n")
 		newfile.write("presidential_dictatorship = {\n	reactionary = yes\n\n	election = no\n	appoint_ruling_party = yes\n}\n")
@@ -1177,7 +1181,7 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 				newfile.write("	" + religion + " = { color = " + RELIGION_DICTIONARY[religion_group][religion]["color"] + " icon = " + RELIGION_DICTIONARY[religion_group][religion]["icon"] + " }\n")
 			newfile.write("}\n")
 	os.makedirs("OpenVic/gfx/flags", exist_ok = True)
-	for tag in TAG_SET:
+	for tag in TAG_LIST:
 		if os.path.exists("gfx/flags/" + tag + ".tga"):
 			EU4_flag = Image.open("gfx/flags/" + tag + ".tga").resize((64,64),resample=Image.LANCZOS)
 			loaded_EU4_flag = EU4_flag.load()
@@ -1384,17 +1388,22 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 					elif POPS_AND_RATIOS[pop_type]["standard"] != 0:
 						newfile.write("	" + pop_type +" = { culture = " + PROVINCE_DICTIONARY[province]["culture"] + " religion = " + PROVINCE_DICTIONARY[province]["religion"] + " size = " + str(POPS_AND_RATIOS[pop_type]["standard"]*PROVINCE_DICTIONARY[province]["population"]) + " }\n")
 				newfile.write("}" + "\n")
-	create_localisation_file(TAG_SET - {"REB","NAT","PIR"},["","_ADJ"],"countries")
-	create_localisation_file(STATE_TUPLE,[""],"states")
-	create_localisation_file(PROV_TUPLE,[""],"provinces")
-	create_localisation_file(CULTURE_SET,[""],"cultures")
-	create_localisation_file(RELIGION_SET,[""],"religions")
-	create_localisation_file(TECH_GROUP_SET,[""],"technology_groups")
+	for tag in ["REB","NAT","PIR"]:
+		if tag in TAG_LIST:
+			TAG_LIST.remove(tag)
+	create_localisation_file(TAG_LIST,["","_ADJ"],"countries")
+	create_localisation_file(STATE_NAME_LIST,[""],"states")
+	create_localisation_file(PROV_LIST,[""],"provinces")
+	create_localisation_file(CULTURE_LIST,[""],"cultures")
+	create_localisation_file(RELIGION_LIST,[""],"religions")
+	create_localisation_file(TECH_GROUP_LIST,[""],"technology_groups")
 	# The 0 in front of the normal localisation file name is to make sure that this localisation gets applied, rather than base V2 localisation.
 	output_path = os.getcwd() + "\\OpenVic\\localisation\\0 terrain.csv"
 	os.makedirs(os.path.dirname(output_path), exist_ok = True)
 	with open(output_path,"a",encoding=OUTPUT_ENCODING,newline='\n') as file:
-		for terrain in set(PROVINCE_TERRAIN_DICTIONARY.keys()) - {"ocean","inland_ocean"} - set(FORCE_OCEAN):
+		for terrain in PROVINCE_TERRAIN_DICTIONARY:
+			if terrain in ["ocean","inland_ocean"] or terrain in FORCE_OCEAN:
+				continue
 			file.write(terrain + ";")
 			for language in ["english","french","german","polish","spanish"]:
 				if language in LANGUAGES:
@@ -1407,7 +1416,7 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 	output_path = os.getcwd() + "\\OpenVic\\localisation\\0 governments.csv"
 	os.makedirs(os.path.dirname(output_path), exist_ok = True)
 	with open(output_path,"a",encoding=OUTPUT_ENCODING,newline='\n') as file:
-		for government in GOVERNMENT_SET:
+		for government in GOVERNMENT_LIST:
 			file.write(government + ";")
 			for language in ["english","french","german","polish","spanish"]:
 				if language in LANGUAGES:
@@ -1530,7 +1539,7 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 			if "rotation" in PORT_POSITIONS[province]:
 				newfile.write(province + " = {\n	building_position = {\n		naval_base = { x = " + PORT_POSITIONS[province]["position"][0] + " y = " + PORT_POSITIONS[province]["position"][1] + " }\n	}\n	building_rotation = { naval_base = " + PORT_POSITIONS[province]["rotation"] + " }\n}\n")
 			else:
-				newfile.write(province + " = {\n	building_position = {\n		naval_base = {\n			x = " + PORT_POSITIONS[province]["position"][0] + "\n			y = " + PORT_POSITIONS[province]["position"][1] + "\n		}\n	}\n}\n")
+				newfile.write(province + " = {\n	building_position = {\n		naval_base = { x = " + PORT_POSITIONS[province]["position"][0] + " y = " + PORT_POSITIONS[province]["position"][1] + " }\n	}\n}\n")
 	Image.open("map/provinces.bmp").transpose(Image.FLIP_TOP_BOTTOM).save("OpenVic/map/provinces.bmp")
 	V2_river_bmp = create_river_bmp()
 	V2_river_bmp.save("OpenVic/map/rivers.bmp")

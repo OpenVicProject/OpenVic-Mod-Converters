@@ -412,6 +412,8 @@ def get_governments():
 				next_government = text.split(" = {",maxsplit=1)[0].rsplit(" ",maxsplit=1)[1]
 				text = remove_text_between_brackets(text," " + next_government + " = {",path)
 				if next_government != "pre_dharma_mapping":
+					if next_government in government_set:
+						print(f"The government {next_government} exists at least twice in the common\\governments files.")
 					government_set.add(next_government)
 			if text != "  ":
 				print(f"After evaluating {path} there should be nothing left, but this is: {text[:99]}")
@@ -473,7 +475,10 @@ def check_definition_csv():
 				pass
 			else:
 				print(f"In map\\definition.csv this line has to change or be removed: {line.strip()}")
-	return [definitions_dictionary,RGB_dictionary]
+	image = Image.open("map\\provinces.bmp")
+	pixel_set = set(color for count, color in image.getcolors(65536))
+	provinces_on_the_map = { RGB_dictionary[RGB] for RGB in pixel_set if RGB in RGB_dictionary }
+	return [definitions_dictionary,RGB_dictionary,pixel_set,provinces_on_the_map]
 
 # gets all the text from ?.?.? = { text } for a specified date, including further occurances of it and returns them, but adds " # " between them or returns "#" if either the date entry is empty or none is found or an error occurs.
 def get_date_text(text,date,path):
@@ -777,12 +782,11 @@ def check_terrain():
 	terrain = get_text_between_brackets(text," categories = {","map\\terrain.txt")
 	terrain_index = get_text_between_brackets(text," terrain = {","map\\terrain.txt")
 	terrain_index_list = terrain_index.split()
-	if terrain.__contains__(" pti = { type = pti } "):
+	if terrain.count(" pti = { type = pti } ") == 1:
 		terrain = " ".join(terrain.split(" pti = { type = pti } ",maxsplit=1))
-		if terrain.__contains__("pti = { type = pti }"):
-			print('The "pti = {{ type = pti }}" part was found at least twice in map\\terrain.txt.')
 	else:
-		print(f'The " pti = {{ type = pti }} " part was not found in map\\terrain.txt.')
+		print(f'The " pti = {{ type = pti }} " part does not exist exactly once in map\\terrain.txt.')
+		return [dict(),set()]
 	terrain_list = terrain.split(" = {")
 	province_terrain_dictionary = dict()
 	terrain_override_provinces = set()
@@ -799,7 +803,7 @@ def check_terrain():
 			else:
 				if "terrain_override" in province_terrain_dictionary[current_terrain]:
 					print(f"The terrain {current_terrain} has at least 2 terrain_override parts.")
-				additional_override = set(map(int,terrain_list[1].split("}",maxsplit=1)[0].split()))
+				additional_override = set(map(int,terrain_list[1].split("}",maxsplit=1)[0].split())) & PROVINCES_ON_THE_MAP
 				province_terrain_dictionary[current_terrain]["terrain_override"] = additional_override
 				for prov in additional_override:
 					if prov in terrain_override_provinces:
@@ -953,23 +957,15 @@ def check_date_entries(text,sorted_list,path):
 							print(f"Culture {unique} in {path} was not found in the common\\cultures files")
 					elif unique_entry == " religion = ":
 						if unique == "no_religion":
-								print(f"religion = no_religion will not generate pops. Found for date {date} in {path}")
+							print(f"religion = no_religion will not generate pops. Found for date {date} in {path}")
 						elif unique not in RELIGION_SET:
 							print(f"Religion {unique} in {path} was not found in the common\\religions files")
 					elif unique_entry in [" owner = "," controller = "]:
 						if unique not in TAG_SET and unique != "---":
-							if unique_entry == " owner = ":
-								print(f"Owner {unique} in {path} was not found in the history\\countries files")
-							else:
-								print(f"Controller {unique} in {path} was not found in the history\\countries files")
+							print(f"The tag for {unique_entry.strip()} {unique} in {path} was not found in the history\\countries files")
 					elif unique_entry in [" base_tax = "," base_production = "," base_manpower = "]:
 						if not re.fullmatch("[0-9]+",unique):
-							if unique_entry == " base_tax = ":
-								print(f"base_tax {unique} in {path} is not an integer")
-							elif unique_entry == " base_production = ":
-								print(f"base_production {unique} in {path} is not an integer")
-							else:
-								print(f"base_manpower {unique} in {path} is not an integer")
+							print(f"{unique_entry.strip()} {unique} in {path} is not an integer")
 			if DONT_IGNORE_ISSUE["MISSING_EMPTY_SPACE"] and str(re.search(r'[^ _a-zA-Z]' + unique_entry.strip(),date_text)) != "None":
 				print(f"{unique_entry.strip()} entry may not be recognised as it does not have an empty space in front of it in {path}")
 		added_cores = []
@@ -1021,14 +1017,11 @@ def check_continents():
 	while text.__contains__("= {"):
 		[continent_name,text] = text.split("= {",maxsplit=1)
 		[provinces,text] = text.split("}",maxsplit=1)
-		if provinces == " ":
-			provinces = set()
-			continue
+		provinces = set(map(int,provinces.split())) & PROVINCES_ON_THE_MAP
 		continent_name = continent_name.strip()
-		if continent_name == "island_check_provinces":
+		if (not provinces) or continent_name == "island_check_provinces":
 			continue
 		continent_name_set.add(continent_name)
-		provinces = set(map(int,provinces.split()))
 		continent_list.append([continent_name,provinces])
 		for entry in provinces:
 			if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in PROVINCE_SET:
@@ -1041,14 +1034,14 @@ def check_continents():
 		print("OpenVic only supports 6 continents in the UI, so while it will work when there are more, there wont be any functional buttons for them in some windows. Until support for this gets added, you will have to combine continents. Of course you can just generate the output and merge the continents there instead or ignore this problem.")
 	text = format_text_in_path("map\\default.map")
 	ocean = text.split("sea_starts = {",maxsplit=1)[1].split("}",maxsplit=1)[0]
-	ocean = set(map(int,ocean.split()))
+	ocean = set(map(int,ocean.split())) & PROVINCES_ON_THE_MAP
 	for entry in ocean:
 		if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in PROVINCE_SET:
 			print(f"No province file with the ID {entry} exists, but the province is an ocean province.")
 		if entry in combined_continent_set:
 			print(f"Province {entry} is already on a continent, but also an ocean.")
 	lakes = text.split("lakes = {",maxsplit=1)[1].split("}",maxsplit=1)[0]
-	lakes = set(map(int,lakes.split()))
+	lakes = set(map(int,lakes.split())) & PROVINCES_ON_THE_MAP
 	water_provinces = ocean.union(lakes)
 	for entry in lakes:
 		if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in PROVINCE_SET:
@@ -1057,7 +1050,7 @@ def check_continents():
 			print(f"Province {entry} is already on a continent, but also a lake.")
 		if entry in ocean:
 			print(f"Province {entry} is already an ocean, but also a lake.")
-	leftover_provinces = PROVINCE_SET - combined_continent_set - ocean - lakes
+	leftover_provinces = (PROVINCE_SET & PROVINCES_ON_THE_MAP) - combined_continent_set - ocean - lakes
 	if leftover_provinces:
 		print(f"Some provinces are neither a part of a continent, ocean or lake: {leftover_provinces}")
 	inland_ocean = lakes.copy()
@@ -1077,21 +1070,20 @@ def check_continents():
 		for tag in TAG_SET:
 			if tag in CAPITAL_DICTIONARY:
 				if set(CAPITAL_DICTIONARY[tag]) - combined_continent_set:
-					print(f"At least one capital in the history of tag {tag} is not continental or the province simply does not exist: {set(CAPITAL_DICTIONARY[tag]) - combined_continent_set}.")
+					print(f"At least one capital in the history of tag {tag} is not continental or the province simply does not exist on the map, for example due to a wrong RGB value: {set(CAPITAL_DICTIONARY[tag]) - combined_continent_set}.")
 	if water_provinces - EMPTY_PROVINCE_FILES_SET:
 		print(f"These water provinces have some entries in their files: {water_provinces - EMPTY_PROVINCE_FILES_SET}")
 	image = Image.open("map\\provinces.bmp")
 	w,h = image.size
 	load_province_bmp = image.load()
-	pixel_set = set(color for count, color in image.getcolors(65536)) # TODO eventually increase the max color value.
 	if text.count(" max_provinces = ") != 1:
 		print('Either " max_provinces = " does not exist in the map\\default.map file or it appears multiple times.')
 	else:
 		max_provinces = text.split(" max_provinces = ",maxsplit=1)[1].split(" ",maxsplit=1)[0]
 		if not re.fullmatch("[0-9]+",max_provinces):
 			print(f"In map\\default.map max_provinces = {max_provinces} is not an integer value.")
-		elif len(pixel_set) >= int(max_provinces):
-			print(f"The max_provinces value {max_provinces} in the map\\default.map should be at least 1 higher than the number of different colors in the province.bmp {len(pixel_set)}.")
+		elif len(PIXEL_SET) >= int(max_provinces):
+			print(f"The max_provinces value {max_provinces} in the map\\default.map should be at least 1 higher than the number of different colors in the province.bmp {len(PIXEL_SET)}.")
 		elif int(max_provinces) >= 65536:
 			print(f"OpenVic does not yet support more than 65536 provinces and this script will mention a lot of false positives, if there are more unique colors in the province.bmp.")
 	tiny_province_color_set = set()
@@ -1107,9 +1099,9 @@ def check_continents():
 				if load_province_bmp[x,y] in tiny_province_color_set:
 					print(f"The pixel {x},{y} with color {load_province_bmp[x,y]} belongs to a tiny province.")
 	province_colors_are_in_definition_csv = True
-	if pixel_set.difference(RGB_DICTIONARY.keys()):
+	if PIXEL_SET.difference(RGB_DICTIONARY.keys()):
 		province_colors_are_in_definition_csv = False
-		print(f"These colors are in the provinces.bmp, but not in the defintion.csv {pixel_set.difference(RGB_DICTIONARY.keys())}")
+		print(f"These colors are in the provinces.bmp, but not in the defintion.csv {PIXEL_SET.difference(RGB_DICTIONARY.keys())}")
 		for x in range(w):
 			for y in range(h):
 				if load_province_bmp[x,y] not in RGB_DICTIONARY:
@@ -1201,7 +1193,7 @@ def check_continents():
 		if provinces == " ":
 			continue
 		climate_name = climate_name.rsplit(" ",maxsplit=1)[1]
-		provinces = set(map(int,provinces.split()))
+		provinces = set(map(int,provinces.split())) & PROVINCES_ON_THE_MAP
 		for entry in provinces:
 			if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in PROVINCE_SET:
 				print(f"No province file with the ID {entry} exists, but the province has the climate: {climate_name}")
@@ -1222,7 +1214,7 @@ def check_continents():
 			print(f"The following provinces are continental and don't use terrain_override: {leftover_provinces}")
 	if impassable - EMPTY_PROVINCE_FILES_SET:
 		print(f"The following impassable provinces do not have empty province files: {impassable - EMPTY_PROVINCE_FILES_SET}")
-	return [continent_name_set,combined_continent_set,ocean,lakes,impassable,pixel_set,water_provinces,adjacency_dictionary]
+	return [continent_name_set,combined_continent_set,ocean,lakes,impassable,water_provinces,adjacency_dictionary]
 
 def check_adjacencies():
 	csv_adjacency_dictionary = defaultdict(set)
@@ -1234,8 +1226,8 @@ def check_adjacencies():
 					print(f"At least one of the province IDs {From} or {To} or {Through} contains something else than numbers, for example empty spaces are not allowed by my script, in map\\adjacencies.csv: {line.strip()}")
 					continue
 				From,To,Through = map(int,(From,To,Through))
-				if From == To:
-					print(f"From and To are equal in map\\adjacencies.csv: {line.strip()}")
+				if (From == To) or (From not in PROVINCES_ON_THE_MAP) or (To not in PROVINCES_ON_THE_MAP):
+					print(f"From and To are equal or at least one is not on the map in map\\adjacencies.csv: {line.strip()}")
 					continue
 				if Type not in ["sea","","canal","land","lake","river"]:
 					print(f"Invalid adjacency type {Type}: {line.strip()}.")
@@ -1278,31 +1270,30 @@ def check_adjacencies():
 	return
 
 def check_area():
-	area_province_set = set()
+	combined_area_province_set = set()
 	area_set = set()
 	text = format_text_in_path("map\\area.txt")
 	text_list = text.split(" = {")
 	area_name = text_list[0].strip()
 	text_list.remove(text_list[0])
 	for entry in text_list:
+		area_province_set = set(map(int,entry.split("}",maxsplit=1)[0].split())) & PROVINCES_ON_THE_MAP
 		if area_name in area_set:
 			print(f"At least 2 areas have the same name: {area_name}")
-		elif set(entry.split("}",maxsplit=1)[0].split()):
+		elif area_province_set:
 			area_set.add(area_name)
-		else:
-			continue
-		for province in set(map(int,entry.split("}",maxsplit=1)[0].split())):
-			if province in area_province_set:
+		for province in area_province_set:
+			if province in combined_area_province_set:
 				print(f"The province {province} is already in another area.")
 			elif province in IMPASSABLE_SET:
 				print(f"The province {province} is impassable and should not be in an area.")
 			elif province in LAKES_SET:
 				print(f"The province {province} is a lake and should not be in an area.")
 			else:
-				area_province_set.add(province)
+				combined_area_province_set.add(province)
 		area_name = entry.split("}",maxsplit=1)[1].strip()
-	if COMBINED_CONTINENT_SET - area_province_set - IMPASSABLE_SET:
-		print(f"Some continental provinces are not in an area: {COMBINED_CONTINENT_SET - area_province_set - IMPASSABLE_SET}")
+	if COMBINED_CONTINENT_SET - combined_area_province_set - IMPASSABLE_SET:
+		print(f"Some continental provinces are not in an area: {COMBINED_CONTINENT_SET - combined_area_province_set - IMPASSABLE_SET}")
 	return area_set
 
 def check_positions():
@@ -1450,7 +1441,7 @@ def check_positions():
 		else:
 			print(f"Due to the brackets being wrong no province ID could be found in {provinceID}")
 			continue
-		if int(provinceID) in IMPASSABLE_SET or int(provinceID) in LAKES_SET or int(provinceID) in OCEAN_SET:
+		if int(provinceID) in IMPASSABLE_SET or int(provinceID) in LAKES_SET or int(provinceID) in OCEAN_SET or int(provinceID) not in PROVINCES_ON_THE_MAP:
 			continue
 		[city_x,city_y,unit_x,unit_y,name_x,name_y,port_x,port_y,positions] = positions.split(" ",maxsplit=8)
 		if int(float(city_x)) < 0 or int(float(city_y)) < 0 or int(float(city_x)) >= w or int(float(city_y)) >= h:
@@ -1518,7 +1509,7 @@ def check_localisation():
 			print(f"Both an area and a tag or tag adjective are called {area}.")
 		else:
 			localisation_dictionary[area] = 0
-	for province in PROVINCE_SET:
+	for province in (PROVINCE_SET & PROVINCES_ON_THE_MAP):
 		if "PROV" + str(province) in localisation_dictionary:
 			print(f"Both an area and a province are called {province}.")
 		else:
@@ -1560,6 +1551,7 @@ def check_localisation():
 	THESE_KEYS_CAN_MISS = {"monarchy_name","theocracy_name","republic_name","native_name","tribal_name","europe","asia","africa","north_america","south_america","oceania","new_world"}
 	for language in LANGUAGES:
 		l_language_yml = "_l_" + language + ".yml"
+		typo_language_yml = "_I_" + language + ".yml"
 		language_dictionary = localisation_dictionary.copy()
 		for root, dirs, files in os.walk("localisation\\"):
 			for file in files:
@@ -1589,6 +1581,8 @@ def check_localisation():
 									if "$" in value or "[" in value or "]" in value or "£" in value or "\\" in value:
 										print(f"The special meaning of some characters may not be preserved in Victoria 2 in the line ({line.strip()}) in file {os.path.join(root, file)}.")
 									# TODO find out if there are more EU4 specific localisation functions.
+				elif file.__contains__(typo_language_yml):
+					print(f"The file name should contain a lower L not an upper i in file {os.path.join(root, file)}")
 		for key in language_dictionary:
 			if language_dictionary[key] != 1:
 				if language_dictionary[key] == 0 and (key not in THESE_KEYS_CAN_MISS or language not in {"english","french","german","polish","spanish"}):
@@ -1764,13 +1758,13 @@ else:
 	RELIGION_SET = get_religions()
 	GOVERNMENT_SET = get_governments()
 	TECH_GROUP_SET = get_tech_groups()
-	[DEFINITIONS_DICTIONARY,RGB_DICTIONARY] = check_definition_csv()
+	[DEFINITIONS_DICTIONARY,RGB_DICTIONARY,PIXEL_SET,PROVINCES_ON_THE_MAP] = check_definition_csv()
 	if CULTURE_SET and RELIGION_SET and GOVERNMENT_SET and TECH_GROUP_SET:
 		DATE_STRUCTURE = re.compile(r'[^-0-9]-?[0-9]{1,5}[.][0-9]{1,2}[.][0-9]{1,2} = {')
 		[TAG_SET,CAPITAL_DICTIONARY] = check_country_files()
 		[PROVINCE_TERRAIN_DICTIONARY, TERRAIN_OVERRIDE_PROVINCES] = check_terrain()
 		[PROVINCE_SET,EMPTY_PROVINCE_FILES_SET] = check_province_files()
-		[CONTINENT_NAME_SET,COMBINED_CONTINENT_SET,OCEAN_SET,LAKES_SET,IMPASSABLE_SET,PIXEL_SET,WATER_PROVINCES_SET,ADJACENCY_DICTIONARY] = check_continents()
+		[CONTINENT_NAME_SET,COMBINED_CONTINENT_SET,OCEAN_SET,LAKES_SET,IMPASSABLE_SET,WATER_PROVINCES_SET,ADJACENCY_DICTIONARY] = check_continents()
 		check_adjacencies()
 		AREA_SET = check_area()
 		check_positions()
