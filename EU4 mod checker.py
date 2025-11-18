@@ -467,7 +467,7 @@ def check_definition_csv():
 					if RGB in RGB_dictionary:
 						print(f"Another province was already assigned the same RGB value {RGB} as {provinceID} in map\\definition.csv")
 					else:
-						definitions_dictionary[provinceID] = RGB
+						definitions_dictionary[int(provinceID)] = RGB
 						RGB_dictionary[RGB] = int(provinceID)
 			elif not_more_than_once and (line[0] == "p"):
 				not_more_than_once = False
@@ -1277,7 +1277,10 @@ def check_area():
 	area_name = text_list[0].strip()
 	text_list.remove(text_list[0])
 	for entry in text_list:
-		area_province_set = set(map(int,entry.split("}",maxsplit=1)[0].split())) & PROVINCES_ON_THE_MAP
+		area_list = list(map(int,entry.split("}",maxsplit=1)[0].split()))
+		if len(area_list) != len(set(area_list)):
+			print(f"Some duplicate provinces are in {area_name}, specifically { {x for x in area_list if area_list.count(x) > 1} }")
+		area_province_set = set(area_list) & PROVINCES_ON_THE_MAP
 		if area_name in area_set:
 			print(f"At least 2 areas have the same name: {area_name}")
 		elif area_province_set:
@@ -1326,19 +1329,19 @@ def check_positions():
 		return
 	OCEAN_RGB_SET = set()
 	for provinceID in OCEAN_SET:
-		if str(provinceID) in DEFINITIONS_DICTIONARY:
-			OCEAN_RGB_SET.add(DEFINITIONS_DICTIONARY[str(provinceID)])
+		if provinceID in DEFINITIONS_DICTIONARY:
+			OCEAN_RGB_SET.add(DEFINITIONS_DICTIONARY[provinceID])
 		else:
 			print(f"The province ID {provinceID} is not found in the map\\definition.csv file or it's color is already used by another province, but it is an ocean.")
 	UNIMPORTANT_RGB_SET = set()
 	for provinceID in LAKES_SET:
-		if str(provinceID) in DEFINITIONS_DICTIONARY:
-			UNIMPORTANT_RGB_SET.add(DEFINITIONS_DICTIONARY[str(provinceID)])
+		if provinceID in DEFINITIONS_DICTIONARY:
+			UNIMPORTANT_RGB_SET.add(DEFINITIONS_DICTIONARY[provinceID])
 		else:
 			print(f"The province ID {provinceID} is not found in the map\\definition.csv file or it's color is already used by another province, but it is a lake.")
 	for provinceID in IMPASSABLE_SET:
-		if str(provinceID) in DEFINITIONS_DICTIONARY:
-			UNIMPORTANT_RGB_SET.add(DEFINITIONS_DICTIONARY[str(provinceID)])
+		if provinceID in DEFINITIONS_DICTIONARY:
+			UNIMPORTANT_RGB_SET.add(DEFINITIONS_DICTIONARY[provinceID])
 		else:
 			print(f"The province ID {provinceID} is not found in the map\\definition.csv file or it's color is already used by another province, but it is impassable.")
 	positions = format_text_in_path("map\\positions.txt")
@@ -1436,12 +1439,12 @@ def check_positions():
 			elif provinceID[index] == "{":
 				counter -= 1
 				if counter == 0:
-					provinceID = provinceID[:index-3].rsplit(" ",maxsplit=1)[1]
+					provinceID = int(provinceID[:index-3].rsplit(" ",maxsplit=1)[1])
 					break
 		else:
 			print(f"Due to the brackets being wrong no province ID could be found in {provinceID}")
 			continue
-		if int(provinceID) in IMPASSABLE_SET or int(provinceID) in LAKES_SET or int(provinceID) in OCEAN_SET or int(provinceID) not in PROVINCES_ON_THE_MAP:
+		if provinceID in IMPASSABLE_SET or provinceID in LAKES_SET or provinceID in OCEAN_SET or provinceID not in PROVINCES_ON_THE_MAP:
 			continue
 		[city_x,city_y,unit_x,unit_y,name_x,name_y,port_x,port_y,positions] = positions.split(" ",maxsplit=8)
 		if int(float(city_x)) < 0 or int(float(city_y)) < 0 or int(float(city_x)) >= w or int(float(city_y)) >= h:
