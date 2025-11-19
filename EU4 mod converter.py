@@ -29,6 +29,15 @@ EU4_LOCALISATION_DICTIONARY = {
 	"oceania":{"english":"Oceania","french":"Océanie","german":"Ozeanien","polish":"Oceania","spanish":"Oceanía"},
 	"new_world":{"english":"The New World","french":"Nouveau Monde","german":"Die Neue Welt","polish":"Nowy Świat","spanish":"El Nuevo Mundo"}
 }
+# Here you can choose whatever ruling party a nation should have by default.
+COUNTRY_GOVERNMENT_DICTIONARY = {
+	"monarchy":"conservative",
+	"theocracy":"conservative",
+	"republic":"liberal",
+	#"chaos_gov":"reactionary", # for Warhammer Universalis
+	"native":"reactionary",
+	"tribal":"reactionary"
+}
 #POPS_AND_RATIOS = { # For Elder Scrolls Universalis
 #	"artisans":{"standard":500},
 #	"clergy":{"standard":50,"theocracy":200},
@@ -247,10 +256,6 @@ def get_religions():
 						counter += 1
 					elif text[k] == "}":
 						counter -= 1
-						if counter == 0:
-							religion_group = ""
-						elif counter == 1:
-							religion = ""
 				for k in range(mindex + 7,maxdex):
 					if text[k] == "{":
 						counter += 1
@@ -418,7 +423,6 @@ def create_country_dictionary():
 	tag_dictionary = dict()
 	path_dictionary = dict()
 	country_dictionary = dict()
-	technology_set = set()
 	for root, dirs, files in os.walk("history/countries"):
 		for file in files:
 			tag = file[:3]
@@ -441,7 +445,6 @@ def create_country_dictionary():
 						accepted_culture_list.remove(country_dictionary[tag]["primary_culture"])
 					if accepted_culture_list:
 						country_dictionary[tag]["accepted_cultures"] = accepted_culture_list
-					technology_set.add(country_dictionary[tag]["technology_group"])
 					break
 				else:
 					date_text = get_date_text(text,date)
@@ -484,7 +487,7 @@ def create_country_dictionary():
 			country_dictionary[path_dictionary[file]]["color"] = colors.group()[8:].strip()
 			country_dictionary[path_dictionary[file]]["graphical_culture"] = text.split(" graphical_culture = ",maxsplit=1)[1].split(" ",maxsplit=1)[0]
 	tag_list = list(tag_dictionary.keys())
-	return [tag_list,tag_dictionary,country_dictionary,technology_set]
+	return [tag_list,tag_dictionary,country_dictionary]
 
 def create_terrain_list():
 	text = format_text_in_path("map\\terrain.txt")
@@ -1089,7 +1092,7 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 	TECH_GROUP_LIST = get_tech_groups()
 	[DEFINITION_CSV,DEFINITIONS_DICTIONARY,RGB_DICTIONARY,PROVINCES_ON_THE_MAP] = create_definition_csv()
 	DATE_STRUCTURE = re.compile(r'[^-0-9]-?[0-9]{1,5}[.][0-9]{1,2}[.][0-9]{1,2} = {')
-	[TAG_LIST,TAG_DICTIONARY,COUNTRY_DICTIONARY,TECHNOLOGY_SET] = create_country_dictionary()
+	[TAG_LIST,TAG_DICTIONARY,COUNTRY_DICTIONARY] = create_country_dictionary()
 	[PROVINCE_TERRAIN_DICTIONARY,TERRAIN_BMP_INDEX_DICTIONARY] = create_terrain_list()
 	[PROVINCE_DICTIONARY,FORCE_OCEAN_SET] = create_province_dictionary()
 	[CONTINENT_LIST,OCEAN_SET,LAKE_SET,WATER_PROVINCE_SET] = create_continent_list()
@@ -1203,13 +1206,13 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 	output_path = os.getcwd() + "\\OpenVic\\common\\nationalvalues.txt"
 	os.makedirs(os.path.dirname(output_path), exist_ok = True)
 	with open(output_path,"a",encoding=OUTPUT_ENCODING,newline='\n') as newfile:
-		for technology in TECHNOLOGY_SET:
+		for technology in TECH_GROUP_LIST:
 			newfile.write(technology + " = { }\n")
-		if "nv_order" not in TECHNOLOGY_SET:
+		if "nv_order" not in TECH_GROUP_LIST:
 			newfile.write("nv_order = { }\n")
-		if "nv_liberty" not in TECHNOLOGY_SET:
+		if "nv_liberty" not in TECH_GROUP_LIST:
 			newfile.write("nv_liberty = { }\n")
-		if "nv_equality" not in TECHNOLOGY_SET:
+		if "nv_equality" not in TECH_GROUP_LIST:
 			newfile.write("nv_equality = { }\n")
 	output_path = os.getcwd() + "\\OpenVic\\common\\religion.txt"
 	os.makedirs(os.path.dirname(output_path), exist_ok = True)
@@ -1371,14 +1374,10 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 				newfile.write("literacy = 0.2\nnon_state_culture_literacy = 0.2\n")
 			else:
 				newfile.write("literacy = 0\nnon_state_culture_literacy = 0\n")
-			if COUNTRY_DICTIONARY[tag]["government"] == "monarchy" or COUNTRY_DICTIONARY[tag]["government"] == "theocracy":
-				newfile.write("ruling_party = openvic_generic_conservative\n")
-			elif COUNTRY_DICTIONARY[tag]["government"] == "native" or COUNTRY_DICTIONARY[tag]["government"] == "tribal":
-				newfile.write("ruling_party = openvic_generic_reactionary\n")
-			elif COUNTRY_DICTIONARY[tag]["government"] == "republic":
-				newfile.write("ruling_party = openvic_generic_liberal\n")
+			if COUNTRY_DICTIONARY[tag]["government"] in COUNTRY_GOVERNMENT_DICTIONARY:
+				newfile.write("ruling_party = openvic_generic_" + COUNTRY_GOVERNMENT_DICTIONARY[COUNTRY_DICTIONARY[tag]["government"]] + "\n")
 			else:
-				print(f"An unexpected government: {COUNTRY_DICTIONARY[tag]["government"]} has been found and assigned the ruling party reactionary, please mention this issue on github or discord, so i can fix this.")
+				print(f"An unexpected government: {COUNTRY_DICTIONARY[tag]["government"]} has been found for tag {tag} and was assigned the ruling party reactionary.")
 				newfile.write("ruling_party = openvic_generic_reactionary\n")
 			if COUNTRY_DICTIONARY[tag]["government"] != "native" and COUNTRY_DICTIONARY[tag]["government"] != "tribal":
 				newfile.write("\npost_napoleonic_thought = 1\nflintlock_rifles = 1\nbronze_muzzle_loaded_artillery = 1\nmilitary_staff_system = 1\npost_nelsonian_thought = 1\nclipper_design = 1\nprivate_banks = 1\nno_standard = 1\nearly_classical_theory_and_critique = 1\nfreedom_of_trade = 1\nguild_based_production = 1\nlate_enlightenment_philosophy = 1\nmalthusian_thought = 1\nwater_wheel_power = 1\npublishing_industry = 1\nmechanical_production = 1\nmechanized_mining = 1\nexperimental_railroad = 1\nbasic_chemistry = 1\n")

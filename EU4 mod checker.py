@@ -748,7 +748,7 @@ def check_country_files():
 			if tag_dictionary[tag] == "No path":
 				tags_without_path.append(tag)
 		print(f"No path has been set in common\\country_tags for these tags from history\\countries: {tags_without_path}")
-	COLOR_STRUCTURE = re.compile(r" color = \{ (-?\d+) (-?\d+) (-?\d+) \}")
+	COLOR_STRUCTURE = re.compile(r" color = \{ ([0-9]+) ([0-9]+) ([0-9]+) \}")
 	for root, dirs, files in os.walk("common\\countries\\"):
 		for file in files:
 			if file not in path_dictionary:
