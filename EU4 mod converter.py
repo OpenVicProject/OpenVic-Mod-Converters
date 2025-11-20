@@ -1538,7 +1538,7 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 		for index in range(max(0,len(CONTINENT_LIST) - 8)):
 			newfile.write("	# " + CONTINENT_LIST[index + 6][0])
 			province_string = ""
-			for province in CONTINENT_LIST[index][1]:
+			for province in CONTINENT_LIST[index + 6][1]:
 				province_string += province + " "
 			newfile.write("\n		" + province_string.strip() + "\n	")
 		newfile.write("}\n}\n")
