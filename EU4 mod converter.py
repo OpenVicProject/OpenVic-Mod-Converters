@@ -184,7 +184,12 @@ def get_cultures():
 							name_tuple = sorted(tuple(set(name_list + name_string.split())),key=str.lower)
 						if name_tuple:
 							name_string = ""
+							length_counter = 0
 							for name in name_tuple:
+								length_counter += 1 + len(name)
+								if length_counter > 110:
+									length_counter = len(name)
+									name_string += "\n			"
 								name_string += name + " "
 						if name_string != "":
 							culture_dictionary[culture_group]["standard_names"][new_entry] = name_string.strip()
@@ -208,7 +213,12 @@ def get_cultures():
 						name_tuple = sorted(tuple(set(name_list + name_string.split())),key=str.lower)
 					if name_tuple:
 						name_string = ""
+						length_counter = 0
 						for name in name_tuple:
+							length_counter += 1 + len(name)
+							if length_counter > 110:
+								length_counter = len(name)
+								name_string += "\n			"
 							name_string += name + " "
 					if name_string != "":
 						culture_dictionary[culture_group][culture][new_entry] = name_string.strip()
@@ -1584,14 +1594,27 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 	V2_river_bmp.save("OpenVic/map/rivers.bmp")
 	EU4_terrain = Image.open("map/terrain.bmp").transpose(Image.FLIP_TOP_BOTTOM)
 	terrain_palette = EU4_terrain.getpalette()
-	terrain_palette += [0] * max(0,768 - len(terrain_palette))
+	terrain_color_set = set(color for count, color in Image.open("map\\terrain.bmp").convert(mode="RGB").getcolors())
+	new_terrain_palette = [0] * 768
+	m = n = 0
+	for i in range(256):
+		while (0,n,m) in terrain_color_set:
+			m += 1
+			if m > 32:
+				m = 0
+				n += 1
+		terrain_color_set.add((0,n,m))
+		new_terrain_palette[3*i:3*i+3] = [0,n,m]
+	for i in range(64):
+		if i in ATLAS_DICTIONARY and (ATLAS_DICTIONARY[i]["bmp_index"] < 64 or TERRAIN_BMP_INDEX_DICTIONARY[i] == "ocean"):
+			n = ATLAS_DICTIONARY[i]["bmp_index"] * 3
+			new_terrain_palette[n:n+3] = terrain_palette[3*i:3*i+3]
 	w,h = EU4_terrain.size
 	load_EU4_terrain = EU4_terrain.load()
+	EU4_terrain.putpalette(new_terrain_palette)
 	for x in range(w):
 		for y in range(h):
 			load_EU4_terrain[x,y] = ATLAS_DICTIONARY[load_EU4_terrain[x,y]]["bmp_index"]
-	terrain_palette[762:765] = [0, 0, 255] # TODO use correct terrain colors eventually
-	EU4_terrain.putpalette(terrain_palette)
 	EU4_terrain.save("OpenVic\\map\\terrain.bmp")
 	terrain_palette = [140, 125, 90] * 256
 	terrain_palette[762:765] = [200, 200, 175]
