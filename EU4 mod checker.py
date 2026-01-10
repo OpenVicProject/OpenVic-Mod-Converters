@@ -46,11 +46,11 @@ DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output file
 	"UNIT_POSITION":False, # The position of units could be outside of the province, though this currently does not matter for conversion to a Victoria 2 mod.
 	"NAME_POSITION":False, # The position of the name could be outside of the province, though this currently does not matter for conversion to a Victoria 2 mod.
 	"MISSING_TERRAIN_MODIFIER":False, # If True you will get a message for every terrain that has no supply_limit, movement_cost, combat_width or defence in map\terrain.txt, the default for the mod converter will be 1 for movement_cost and the movement_cost will also have a minimal value of 1 and 0 for supply_limit, combat_width and defence and combat_width will have a minimum of -0.8 as well.
-	"NO_TERRAIN_OVERRIDE": False, # If set to True you get a list of all continental provinces that are not used in any terrain_override, which is not necessary, just something you may want to do.
-	"INCORRECT_TERRAIN": False, # ONLY CHANGE THIS TO TRUE IF THERE ARE NO MORE ERRORS RELATED TO THE MAP! In EU4 it does not matter if the terrain.bmp matches the province being continental or an ocean, however in V2 this is important, so you can choose to automatically generate both the terrain.bmp and rivers.bmp to match this. The new ones will be saved as terrain2.bmp and rivers2.bmp and the generation process for the terrain.bmp is to copy any correct pixel, while incorrect ones will be swapped to ocean or inland_ocean for lakes and the FORCE_INLAND_OCEAN terrains or the CONTINENTAL_INDEX for continental provinces. If you do not see an error message containing: "If no map issues are mentioned above this message you can create the terrain.bmp and rivers.bmp files with correct pixels." leave this option as False as it either means there are important errors that need to be fixed first or very unlikely, everything is already correct.
-	"COAST_NOT_COASTAL": False, # If you want every coastal province to have coastal terrain, change this to True. There will be no exceptions, so don't use this if a mod made some terrain not coastal by choice.
-	"WRONG_PICTURE_SIZE": True, # If you don't want to fix wrong picture sizes you can disable the warning, however depending on how wrong the size is the output could look really bad.
-	"MISSING_FLAGS": False # If you want to know which tags that don't have flags set this to True.
+	"NO_TERRAIN_OVERRIDE":False, # If set to True you get a list of all continental provinces that are not used in any terrain_override, which is not necessary, just something you may want to do.
+	"INCORRECT_TERRAIN":False, # ONLY CHANGE THIS TO TRUE IF THERE ARE NO MORE ERRORS RELATED TO THE MAP! In EU4 it does not matter if the terrain.bmp matches the province being continental or an ocean, however in V2 this is important, so you can choose to automatically generate both the terrain.bmp and rivers.bmp to match this. The new ones will be saved as terrain2.bmp and rivers2.bmp and the generation process for the terrain.bmp is to copy any correct pixel, while incorrect ones will be swapped to ocean or inland_ocean for lakes and the FORCE_INLAND_OCEAN terrains or the CONTINENTAL_INDEX for continental provinces. If you do not see an error message containing: "If no map issues are mentioned above this message you can create the terrain.bmp and rivers.bmp files with correct pixels." leave this option as False as it either means there are important errors that need to be fixed first or very unlikely, everything is already correct.
+	"COAST_NOT_COASTAL":False, # If you want every coastal province to have coastal terrain, change this to True. There will be no exceptions, so don't use this if a mod made some terrain not coastal by choice.
+	"WRONG_PICTURE_SIZE":True, # If you don't want to fix wrong picture sizes you can disable the warning, however depending on how wrong the size is the output could look really bad.
+	"MISSING_FLAGS":False # If you want to know which tags that don't have flags set this to True.
 }
 I_READ_THE_INSTRUCTIONS = False # Set this to True after changing all the settings you need to change or want to change and that's it. Now you can run it, if you have a sufficiently new Python version installed. Maybe anything after 3.7 will work, as well as a new enough Pillow version (Python Imaging Library).
 
@@ -629,7 +629,7 @@ def check_country_files():
 			for character in [" monarch = {"," monarch_consort = {"," monarch_heir = {"," monarch_foreign_heir = {"," queen = {"," heir = {"," define_advisor = {"," leader = {"]:
 				text = remove_text_between_brackets(text,character,path)
 			sorted_list = get_sorted_dates(text,path)
-			uniques = [[" government = ",""],[" primary_culture = ",""],[" religion = ",""],[" capital = ",""],[" technology_group = ",""]]
+			unique_dictionary = {" government = ":""," primary_culture = ":""," religion = ":""," capital = ":""," technology_group = ":""}
 			accepted_culture_list = []
 			added_accepted_culture_list = []
 			removed_accepted_culture_list = []
@@ -638,9 +638,9 @@ def check_country_files():
 				if date == "BASE_DATE":
 					date_text = get_base_date_text(text,sorted_list,path)
 				elif date == "START_DATE":
-					for index in range(len(uniques)):
-						if uniques[index][1] == "":
-							print(f'No valid " {uniques[index][0].strip()}" string was found until the start date in {path}')
+					for unique in unique_dictionary:
+						if unique_dictionary[unique] == "":
+							print(f'No valid " {unique.strip()}" string was found until the start date in {path}')
 					if DONT_IGNORE_ISSUE["DATES_AFTER_START_DATE"]:
 						continue
 					break
@@ -648,39 +648,39 @@ def check_country_files():
 					date_text = get_date_text(text,date,path)
 				if date_text == "#":
 					continue
-				for index in range(len(uniques)):
-					if DONT_IGNORE_ISSUE["MISSING_EMPTY_SPACE"] and str(re.search(r'[^ _a-zA-Z]' + uniques[index][0].strip(),date_text)) != "None":
-						print(f'"{uniques[index][0].strip()}" entry may not be recognised as it does not have an empty space in front of it in {path}')
-					counter = date_text.count(uniques[index][0])
+				for unique in unique_dictionary:
+					if DONT_IGNORE_ISSUE["MISSING_EMPTY_SPACE"] and str(re.search(r'[^ _a-zA-Z]' + unique.strip(),date_text)) != "None":
+						print(f'"{unique.strip()}" entry may not be recognised as it does not have an empty space in front of it in {path}')
+					counter = date_text.count(unique)
 					if counter > 1:
-						print(f"{uniques[index][0].strip()} found {counter} times for date {date} in {path}")
-						uniques[index][1] = ""
+						print(f"{unique.strip()} found {counter} times for date {date} in {path}")
+						unique_dictionary[unique] = ""
 					if counter > 0:
-						uniques[index][1] = date_text.split(uniques[index][0],maxsplit=1)[1].split(" ",maxsplit=1)[0]
-						if index == 0:
-							if uniques[index][1] not in GOVERNMENT_SET:
-								print(f"Government {uniques[index][1]} in {path} was not found in the common\\governments files")
-								uniques[index][1] = ""
-						elif index == 1:
-							if uniques[index][1] not in CULTURE_SET:
-								print(f"Culture {uniques[index][1]} in {path} was not found in the common\\cultures files")
-								uniques[index][1] = ""
-						elif index == 2:
-							if uniques[index][1] not in RELIGION_SET:
-								print(f"Religion {uniques[index][1]} in {path} was not found in the common\\religions files")
-								uniques[index][1] = ""
-						elif index == 3:
-							if re.fullmatch("[0-9]+",uniques[index][1]):
-								capital_dictionary[tag].append(int(uniques[index][1]))
+						unique_dictionary[unique] = date_text.split(unique,maxsplit=1)[1].split(" ",maxsplit=1)[0]
+						if unique == " government = ":
+							if unique_dictionary[unique] not in GOVERNMENT_SET:
+								print(f"Government {unique_dictionary[unique]} in {path} was not found in the common\\governments files")
+								unique_dictionary[unique] = ""
+						elif unique == " primary_culture = ":
+							if unique_dictionary[unique] not in CULTURE_SET:
+								print(f"Culture {unique_dictionary[unique]} in {path} was not found in the common\\cultures files")
+								unique_dictionary[unique] = ""
+						elif unique == " religion = ":
+							if unique_dictionary[unique] not in RELIGION_SET:
+								print(f"Religion {unique_dictionary[unique]} in {path} was not found in the common\\religions files")
+								unique_dictionary[unique] = ""
+						elif unique == " capital = ":
+							if re.fullmatch("[0-9]+",unique_dictionary[unique]):
+								capital_dictionary[tag].append(int(unique_dictionary[unique]))
 							else:
-								print(f"The capital {uniques[index][1]} in {path} is not a number.")
-						elif index == 4:
-							if uniques[index][1] not in TECH_GROUP_SET:
-								print(f"Technology group {uniques[index][1]} in {path} was not found in common\\technology.txt")
-								uniques[index][1] = ""
+								print(f"The capital {unique_dictionary[unique]} in {path} is not a number.")
+						elif unique == " technology_group = ":
+							if unique_dictionary[unique] not in TECH_GROUP_SET:
+								print(f"Technology group {unique_dictionary[unique]} in {path} was not found in common\\technology.txt")
+								unique_dictionary[unique] = ""
 				added_accepted_culture_list = []
 				removed_accepted_culture_list = []
-				add_culture_text = date_text # TODO maybe mention if an accepted culture is the primary culture
+				add_culture_text = date_text
 				while add_culture_text.__contains__(" add_accepted_culture = "):
 					add_culture_text = add_culture_text.split(" add_accepted_culture = ",maxsplit=1)[1]
 					[culture,add_culture_text] = add_culture_text.split(" ",maxsplit=1)
@@ -696,6 +696,8 @@ def check_country_files():
 								print(f"{culture} was already added as accepted culture for {date}, but added again in {path}")
 						else:
 							added_accepted_culture_list.append(culture)
+						if culture == unique_dictionary[" primary_culture = "]:
+							print(f"The culture {culture} is added as accepted culture for {date}, but is already the primary culture in {path}")
 					else:
 						print(f"Invalid add_accepted_culture = {culture} found in {path}")
 				remove_culture_text = date_text
@@ -717,6 +719,8 @@ def check_country_files():
 						if culture in added_accepted_culture_list:
 							print(f"{culture} is added and removed as accepted culture for {date} in {path}")
 							added_accepted_culture_list.remove(culture)
+						if culture == unique_dictionary[" primary_culture = "]:
+							print(f"The culture {culture} is removed as accepted culture for {date}, while it is the primary culture in {path}")
 					else:
 						print(f"Invalid remove_accepted_culture = {culture} found for {date} in {path}")
 	for root, dirs, files in os.walk("common\\country_tags\\"):
