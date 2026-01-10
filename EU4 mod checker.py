@@ -35,6 +35,7 @@ DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output file
 	"REMOVE_NON_EXISTANT_CULTURE":True, # Sometimes cultures are removed as accepted cultures, even though they were not accepted at this date. So maybe some other culture was actually supposed to be removed.
 	"MISSING_PROVINCE_FILE":True, # Some provinces may be placed on a continent or such, but lack a province file, can be ignored as an empty "provinceID.txt" file will simply be generated anyway for the output.
 	"MISSING_PROVINCE_ID":True, # While it is not necessary to use all numbers between 1 and the number of provinces as IDs, maybe you still want to add empty files for such cases, if not you can set it to False.
+	"PROVINCES_WITH_FILES_NOT_USED":True, # Some provinces may have files, but are not actually used on the map, this can be ignored, but maybe is done by mistake.
 	"OCEAN_AND_LAKE_CLIMATE":False, # In EU4 oceans and lakes can use climates to let them freeze during winter, but you may want to remove some not not needed ones.
 	"THROUGH_NOT_IN_OCEAN":False, # While not necessary you may want to set the adjacency type sea in map\adjacencies.csv to land, river or lake, if the Through province is not an ocean.
 	"CANAL_NOT_MUTUAL_NEIGHBOUR":False, # It is not necessary for a canal to be next to the From and To province, the Through province can even be the same as From or To, but maybe you want to know about such cases.
@@ -44,7 +45,7 @@ DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output file
 	"CITY_POSITION":False, # The position of the city could be outside of the province, though this currently does not matter for conversion to a Victoria 2 mod.
 	"UNIT_POSITION":False, # The position of units could be outside of the province, though this currently does not matter for conversion to a Victoria 2 mod.
 	"NAME_POSITION":False, # The position of the name could be outside of the province, though this currently does not matter for conversion to a Victoria 2 mod.
-	"MISSING_TERRAIN_MODIFIER": True, # If True you will get a message for every terrain that has no supply_limit, movement_cost, combat_width or defence in map\terrain.txt, the default for the mod converter will be 1 for movement_cost and the movement_cost will also have a minimal value of 1 and 0 for supply_limit, combat_width and defence and combat_width will have a minimum of -0.8 as well.
+	"MISSING_TERRAIN_MODIFIER":False, # If True you will get a message for every terrain that has no supply_limit, movement_cost, combat_width or defence in map\terrain.txt, the default for the mod converter will be 1 for movement_cost and the movement_cost will also have a minimal value of 1 and 0 for supply_limit, combat_width and defence and combat_width will have a minimum of -0.8 as well.
 	"NO_TERRAIN_OVERRIDE": False, # If set to True you get a list of all continental provinces that are not used in any terrain_override, which is not necessary, just something you may want to do.
 	"INCORRECT_TERRAIN": False, # ONLY CHANGE THIS TO TRUE IF THERE ARE NO MORE ERRORS RELATED TO THE MAP! In EU4 it does not matter if the terrain.bmp matches the province being continental or an ocean, however in V2 this is important, so you can choose to automatically generate both the terrain.bmp and rivers.bmp to match this. The new ones will be saved as terrain2.bmp and rivers2.bmp and the generation process for the terrain.bmp is to copy any correct pixel, while incorrect ones will be swapped to ocean or inland_ocean for lakes and the FORCE_INLAND_OCEAN terrains or the CONTINENTAL_INDEX for continental provinces. If you do not see an error message containing: "If no map issues are mentioned above this message you can create the terrain.bmp and rivers.bmp files with correct pixels." leave this option as False as it either means there are important errors that need to be fixed first or very unlikely, everything is already correct.
 	"COAST_NOT_COASTAL": False, # If you want every coastal province to have coastal terrain, change this to True. There will be no exceptions, so don't use this if a mod made some terrain not coastal by choice.
@@ -282,7 +283,7 @@ def get_religions():
 	religion_set = set()
 	COLOR_STRUCTURE = re.compile(r' color = \{ [0-1][.][0-9]{1,3} [0-1][.][0-9]{1,3} [0-1][.][0-9]{1,3} \}')
 	OPTIONAL_COLOR_STRUCTURE = re.compile(r' color = \{ [0-9]{1,3} [0-9]{1,3} [0-9]{1,3} \}')
-	MIXED_COLOR_STRUCTURE = re.compile(r'(?: color = \{ [0-1][.][0-9]{1,3} [0-1][.][0-9]{1,3} [0-1][.][0-9]{1,3} \})|(?: color = \{ [0-9]{1,3} [0-9]{1,3} [0-9]{1,3} \})')
+	MIXED_COLOR_STRUCTURE = re.compile(r' color = \{ [0-1]?[.]?[0-9]{1,3}[.]? [0-1]?[.]?[0-9]{1,3}[.]? [0-1]?[.]?[0-9]{1,3}[.]? \}')
 	ICON_STRUCTURE = re.compile(r'(?=( icon = [0-9]{1,3} ))')
 	for root, dirs, files in os.walk("common\\religions\\"):
 		for file in files:
@@ -302,17 +303,14 @@ def get_religions():
 				elif len(colors) == 0:
 					print('A different number of "icon = ?" and " color = { ? ? ? }" strings has been found in ' + f"{path}, specifically the icons:\n{icons}\nand colors:\n{optional_colors}")
 					return set()
-				elif len(colors) + len(optional_colors) == len(icons):
-					print(f"The color scheme is mixed, so some colors use the range from 0 to 1, while others are from 0 to 255 in {path}, you need to choose one scheme and convert the other:\n{colors}\nand:\n{optional_colors}")
-					mixed_colors = re.findall(MIXED_COLOR_STRUCTURE,text)
-					if len(mixed_colors) != len(icons):
-						print(f"Please report that the mixed regex for religion colors is wrong, either as github issue or in the OpenVic discord.")
-						return set()
-					else:
-						colors = mixed_colors
 				else:
-					print(f"The color scheme is mixed and the number of found icons does not match the colors as well in {path}, specifically the icons:\n{icons}\nand colors:\n{colors}\nand:\n{optional_colors}")
-					return set()
+					mixed_colors = re.findall(MIXED_COLOR_STRUCTURE,text)
+					if len(mixed_colors) == len(icons):
+						print(f"The color scheme is mixed, but you either have to use the scheme three numbers from 1 to 3 digits or instead have a leading 0 or 1 then one point and at least one and at most 3 digits after the point, for example 0. is not allowed by the converter script, in {path}, so you need to choose one scheme and convert the other. Mixed colors:\n{mixed_colors}\nAll unique mixed colors without normal colors:\n{set(mixed_colors) - set(colors)}\nAll unique mixed colors without optional colors:\n{set(mixed_colors) - set(optional_colors)}")
+						colors = mixed_colors
+					else:
+						print(f"The number of icons and colors in {path} is different. The mixed colors found are:\n{mixed_colors}\nThe icons:\n{icons}\nAll unique mixed colors without normal colors:\n{set(mixed_colors) - set(colors)}\nAll unique mixed colors without optional colors:\n{set(mixed_colors) - set(optional_colors)}")
+						return set()
 			elif colors and optional_colors:
 				print(f"When the colors for one scheme fit the number of icons, there should be none for the other in {path}:\n{colors}\nand:\n{optional_colors}")
 				if len(optional_colors) == len(icons):
@@ -751,9 +749,9 @@ def check_country_files():
 	COLOR_STRUCTURE = re.compile(r" color = \{ ([0-9]+) ([0-9]+) ([0-9]+) \}")
 	for root, dirs, files in os.walk("common\\countries\\"):
 		for file in files:
-			if file not in path_dictionary:
-				print(f"{file} in common\\countries is not used as path in common\\country_tags by any of the tags in history\\countries or some other error occured")
 			path = os.path.join(root, file)
+			if path[17:].replace("\\","/") not in path_dictionary:
+				print(f"{path.replace("\\","/")} in common\\countries is not used as path in common\\country_tags by any of the tags in history\\countries or some other error occured")
 			text = format_text_in_path(path)
 			colors = re.findall(COLOR_STRUCTURE,text)
 			if len(colors) != 1:
@@ -782,10 +780,10 @@ def check_terrain():
 	terrain = get_text_between_brackets(text," categories = {","map\\terrain.txt")
 	terrain_index = get_text_between_brackets(text," terrain = {","map\\terrain.txt")
 	terrain_index_list = terrain_index.split()
-	if terrain.count(" pti = { type = pti } ") == 1:
-		terrain = " ".join(terrain.split(" pti = { type = pti } ",maxsplit=1))
+	if terrain.count(" pti = {") == 1:
+		terrain = remove_text_between_brackets(terrain," pti = {","map\\terrain.txt")
 	else:
-		print(f'The " pti = {{ type = pti }} " part does not exist exactly once in map\\terrain.txt.')
+		print(f'The " pti = {{" part does not exist exactly once in map\\terrain.txt.')
 		return [dict(),set()]
 	terrain_list = terrain.split(" = {")
 	province_terrain_dictionary = dict()
@@ -911,6 +909,8 @@ def check_province_files():
 			for index in range(counter,province):
 				empty_province_files_set.add(index)
 			counter = province
+	if DONT_IGNORE_ISSUE["PROVINCES_WITH_FILES_NOT_USED"] and (province_set - PROVINCES_ON_THE_MAP):
+		print(f"The following provinces have files, but are not used on the map: {province_set - PROVINCES_ON_THE_MAP}")
 	return [province_set,empty_province_files_set]
 
 # Checks if dates contain obvious mistakes like cultures that don't exist in the culture files.
@@ -1766,15 +1766,16 @@ else:
 		DATE_STRUCTURE = re.compile(r'[^-0-9]-?[0-9]{1,5}[.][0-9]{1,2}[.][0-9]{1,2} = {')
 		[TAG_SET,CAPITAL_DICTIONARY] = check_country_files()
 		[PROVINCE_TERRAIN_DICTIONARY, TERRAIN_OVERRIDE_PROVINCES] = check_terrain()
-		[PROVINCE_SET,EMPTY_PROVINCE_FILES_SET] = check_province_files()
-		[CONTINENT_NAME_SET,COMBINED_CONTINENT_SET,OCEAN_SET,LAKES_SET,IMPASSABLE_SET,WATER_PROVINCES_SET,ADJACENCY_DICTIONARY] = check_continents()
-		check_adjacencies()
-		AREA_SET = check_area()
-		check_positions()
-		PROVINCE_SET = PROVINCE_SET.union(COMBINED_CONTINENT_SET,WATER_PROVINCES_SET)
-		check_localisation()
-		check_rivers()
-		check_gfx()
+		if PROVINCE_TERRAIN_DICTIONARY:
+			[PROVINCE_SET,EMPTY_PROVINCE_FILES_SET] = check_province_files()
+			[CONTINENT_NAME_SET,COMBINED_CONTINENT_SET,OCEAN_SET,LAKES_SET,IMPASSABLE_SET,WATER_PROVINCES_SET,ADJACENCY_DICTIONARY] = check_continents()
+			check_adjacencies()
+			AREA_SET = check_area()
+			check_positions()
+			PROVINCE_SET = PROVINCE_SET.union(COMBINED_CONTINENT_SET,WATER_PROVINCES_SET)
+			check_localisation()
+			check_rivers()
+			check_gfx()
 	else:
 		if not CULTURE_SET:
 			print(f"No cultures could be found in the common\\cultures folder.")
