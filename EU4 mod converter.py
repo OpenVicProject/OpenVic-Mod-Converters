@@ -492,10 +492,11 @@ def create_country_dictionary():
 	COLOR_STRUCTURE = re.compile(r' color = \{ [0-9]{1,3} [0-9]{1,3} [0-9]{1,3} \} ')
 	for root, dirs, files in os.walk("common/countries"):
 		for file in files:
-			text = format_text_in_path(os.path.join(root, file))
+			path = os.path.join(root, file)
+			text = format_text_in_path(path)
 			colors = COLOR_STRUCTURE.search(text)
-			country_dictionary[path_dictionary[file]]["color"] = colors.group()[8:].strip()
-			country_dictionary[path_dictionary[file]]["graphical_culture"] = text.split(" graphical_culture = ",maxsplit=1)[1].split(" ",maxsplit=1)[0]
+			country_dictionary[path_dictionary[path[17:].replace("\\","/")]]["color"] = colors.group()[8:].strip()
+			country_dictionary[path_dictionary[path[17:].replace("\\","/")]]["graphical_culture"] = text.split(" graphical_culture = ",maxsplit=1)[1].split(" ",maxsplit=1)[0]
 	tag_list = list(tag_dictionary.keys())
 	return [tag_list,tag_dictionary,country_dictionary]
 
