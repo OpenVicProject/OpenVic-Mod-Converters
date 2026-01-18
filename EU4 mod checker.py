@@ -2,6 +2,7 @@
 # Place this Python script into whatever mod folder you want to check. The mod needs to have the common\countries, common\country_tags, common\cultures, common\religions, common\governments, history\countries and history\provinces folders and map\area.txt, map\climate.txt, map\continent.txt, map\definition.csv and map\default.map files as well as the provinces.bmp, rivers.bmp and terrain.bmp. If those are not present, either because the mod uses the base game files or relies on another mod you have to copy them or can't use this script. If there are any DS_Store files they need to be removed.
 from collections import defaultdict
 from PIL import Image
+from math import dist
 import re
 import os
 # These global values are the only parts of the script you might need to change, just follow the instructions.
@@ -19,6 +20,8 @@ ATLAS_PATH = "map\\terrain\\atlas0.dds" # The textures for the terrain map seem 
 ATLAS_SIZE = (4,4) # Change this to the number of different squares in the map\terrain\atlas0 file, however (8,8) is the maximum and (2,2) the minimum. First number is from left to right, second is up down, although they are most likely the same.
 MIN_PROVINCE_SIZE = 10 # You will get a warning for every province that has less pixels than the number you enter, as it may not be an intended province, but rather some leftover pixels.
 MAX_PROVINCE_SIZE = 16363 # When provinces are too big Victoria 2 can bug out, like a large land province can be shown as partially ocean. Simply splitting up the provinces will solve that issue, though it may not be necessary to do that, so just increase the size if there are no issues with this and you don't want to see the warnings.
+STRAY_PIXEL_DISTANCE = 50 # Instead of a stray pixels in the provinces.bmp some pixels may just be small islands instead. If a pixel is not connected to the area that has the position of the city, unit or name position and further away than this value, you will get a warning.
+STRAY_PIXEL_AMOUNT = 10 # Even if the stray pixels are far enough away, if more than this amount are connected it wont give a warning, so setting the value to 0 will disable all warnings.
 DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output files, so you can choose to ignore them, though in some cases you really should check them.
 	"INDIVIDUAL_PIXELS":False, # Some provinces will be assigned to a continent, while some of their pixels in the terrain.bmp are for oceans/in the TERRAIN_DICTIONARY, while other provinces are assigned as ocean or lake in the default.map file, but have pixels that are not according to the TERRAIN_DICTIONARY. The province IDs with such wrong pixels will be shown regardless of whether this option is False or True, but setting this option to True will also show all individual wrong pixels, which can easily cause tens of thousands of lines mentioning wrong pixels.
 	"DATES_AFTER_START_DATE":True, # If you only care about mistakes that happen until the START_DATE, set this to False.
@@ -70,8 +73,18 @@ def format_text_in_path(path):
 			mindex = max(0,index - 50)
 			print(f"{counter} character{'s' * (counter != 1)} with wrong encoding found in file: {file.name} specifically � in:")
 			print(text[mindex:index + 50])
-		if text.count("{") != text.count("}"): # TODO go through every character and count the bracketvalue
+		if text.count("{") != text.count("}"):
 			print(f"DONT IGNORE THIS: The number of opening and closing brackets in {path} is not equal.")
+		else:
+			counter = 0
+			for index in range(len(text)):
+				if text[index] == "{":
+					counter += 1
+				elif text[index] == "}":
+					counter -= 1
+					if counter < 0:
+						print(f"DONT IGNORE THIS: When counting the opening (+1) and closing (-1) brackets in {path} the sum gets negative around {text[index - 25:index + 25]}.")
+						break
 	return text
 
 # Makes sure that the start date is valid and removes any unnecessary zeros in front of the numbers.
@@ -1434,6 +1447,7 @@ def check_positions():
 	elif ocean not in {image_load[w-2,h-2],image_load[w-2,h-1],image_load[w-1,h-2]}:
 		image_load[w-1,h-1] = unimportant
 	coastal_pixel_set = set(color for count, color in image.getcolors(65536))
+	positions_dictionary = {p: None for p in PROVINCES_ON_THE_MAP }
 	while positions.__contains__("position = { "):
 		[provinceID,positions] = positions.split("position = { ",maxsplit=1)
 		counter = 1
@@ -1448,7 +1462,7 @@ def check_positions():
 		else:
 			print(f"Due to the brackets being wrong no province ID could be found in {provinceID}")
 			continue
-		if provinceID in IMPASSABLE_SET or provinceID in LAKES_SET or provinceID in OCEAN_SET or provinceID not in PROVINCES_ON_THE_MAP:
+		if provinceID in IMPASSABLE_SET or provinceID in LAKES_SET or provinceID not in PROVINCES_ON_THE_MAP:
 			continue
 		[city_x,city_y,unit_x,unit_y,name_x,name_y,port_x,port_y,positions] = positions.split(" ",maxsplit=8)
 		if int(float(city_x)) < 0 or int(float(city_y)) < 0 or int(float(city_x)) >= w or int(float(city_y)) >= h:
@@ -1469,15 +1483,24 @@ def check_positions():
 		if provinceID not in DEFINITIONS_DICTIONARY:
 			print(f"The province ID {provinceID} is not found in the map\\definition.csv file or it's color is already used by another province, but a position for it exists.")
 			continue
-		if DONT_IGNORE_ISSUE["CITY_POSITION"] and city_x != -1 and city_y != -1:
+		if city_x != -1 and city_y != -1:
 			if image_load_original[int(float(city_x)),int(h-1 - float(city_y))] != DEFINITIONS_DICTIONARY[provinceID]:
-				print(f"The rounded position {int(float(city_x))},{int(float(city_y))} of the city model, which is {int(float(city_x))},{int(h-1 - float(city_y))} when opening the bmp with GIMP, for province {provinceID} is not within the province itself.")
-		if DONT_IGNORE_ISSUE["UNIT_POSITION"] and unit_x != -1 and unit_y != -1:
+				if DONT_IGNORE_ISSUE["CITY_POSITION"] and provinceID not in OCEAN_SET:
+					print(f"The rounded position {int(float(city_x))},{int(float(city_y))} of the city model, which is {int(float(city_x))},{int(h-1 - float(city_y))} when opening the bmp with GIMP, for province {provinceID} is not within the province itself.")
+			else:
+				positions_dictionary[provinceID] = (int(float(city_x)),int(h-1 - float(city_y)))
+		if unit_x != -1 and unit_y != -1:
 			if image_load_original[int(float(unit_x)),int(h-1 - float(unit_y))] != DEFINITIONS_DICTIONARY[provinceID]:
-				print(f"The rounded position {int(float(unit_x))},{int(float(unit_y))} of the unit model, which is {int(float(unit_x))},{int(h-1 - float(unit_y))} when opening the bmp with GIMP, for province {provinceID} is not within the province itself.")
-		if DONT_IGNORE_ISSUE["NAME_POSITION"] and name_x != -1 and name_y != -1:
+				if DONT_IGNORE_ISSUE["UNIT_POSITION"]:
+					print(f"The rounded position {int(float(unit_x))},{int(float(unit_y))} of the unit model, which is {int(float(unit_x))},{int(h-1 - float(unit_y))} when opening the bmp with GIMP, for province {provinceID} is not within the province itself.")
+			else:
+				positions_dictionary[provinceID] = (int(float(unit_x)),int(h-1 - float(unit_y)))
+		if name_x != -1 and name_y != -1:
 			if image_load_original[int(float(name_x)),int(h-1 - float(name_y))] != DEFINITIONS_DICTIONARY[provinceID]:
-				print(f"The rounded position {int(float(name_x))},{int(float(name_y))} of the province name, which is {int(float(name_x))},{int(h-1 - float(name_y))} when opening the bmp with GIMP, for province {provinceID} is not within the province itself.")
+				if DONT_IGNORE_ISSUE["NAME_POSITION"]:
+					print(f"The rounded position {int(float(name_x))},{int(float(name_y))} of the province name, which is {int(float(name_x))},{int(h-1 - float(name_y))} when opening the bmp with GIMP, for province {provinceID} is not within the province itself.")
+			else:
+				positions_dictionary[provinceID] = (int(float(name_x)),int(h-1 - float(name_y)))
 		if DEFINITIONS_DICTIONARY[provinceID] not in coastal_pixel_set:
 			continue
 		port_x = int(float(port_x))
@@ -1503,6 +1526,43 @@ def check_positions():
 		if coastal_nearby and ocean_nearby:
 			if image_load[port_x,port_y] not in {DEFINITIONS_DICTIONARY[provinceID],ocean}:
 				print(f"The rounded port position {port_x},{h-1-port_y} for province {provinceID}, which would be {port_x},{port_y} in GIMP is neither a coastal nor an ocean pixel, if the province is not supposed to have a port, some stray pixel is somewhere next to an ocean.")
+	image = Image.open("map\\provinces.bmp").copy()
+	image_load = image.load()
+	if [p for p,v in positions_dictionary.items() if v == None ]:
+		print(f"The provinces {[p for p,v in positions_dictionary.items() if v == None ]} do not have at least one rounded position within the province itself.")
+	if STRAY_PIXEL_AMOUNT > 0 and (STRAY_PIXEL_DISTANCE < w or STRAY_PIXEL_DISTANCE < h):
+		for province,position in positions_dictionary.items():
+			if position == None:
+				continue
+			image_load[position] = unimportant
+			coordinates = {position}
+			current_color = DEFINITIONS_DICTIONARY[province]
+			while coordinates:
+				a,b = coordinates.pop()
+				for dx, dy in [(0,-1),(0,1),(-1,0),(1,0)]:
+					nx, ny = a + dx, b + dy
+					if 0 <= nx < w and 0 <= ny < h and current_color == image_load[nx,ny]:
+						image_load[nx,ny] = unimportant
+						coordinates.add((nx,ny))
+		for x in range(w):
+			for y in range(h):
+				if image_load[x,y] != unimportant:
+					counter = 1
+					current_color = image_load[x,y]
+					coordinates = {(x,y)}
+					while coordinates:
+						a,b = coordinates.pop()
+						for dx, dy in [(0,-1),(0,1),(-1,0),(1,0)]:
+							nx, ny = a + dx, b + dy
+							if 0 <= nx < w and 0 <= ny < h and current_color == image_load[nx,ny]:
+								image_load[nx,ny] = unimportant
+								coordinates.add((nx,ny))
+								counter += 1
+					if counter < STRAY_PIXEL_AMOUNT:
+						if positions_dictionary[RGB_DICTIONARY[image_load_original[x,y]]] == None:
+							print(f"The province {RGB_DICTIONARY[image_load_original[x,y]]} might have {counter} possible stray pixel{'s' * (counter != 1)} at {x},{y}, however without a valid position within the province, this may very well be a false positive.")
+						elif dist(positions_dictionary[RGB_DICTIONARY[image_load_original[x,y]]],(x,y)) > STRAY_PIXEL_DISTANCE:
+							print(f"{counter} possible stray pixel{'s' * (counter != 1)} ha{'s' if counter == 1 else 've'} been found at {x},{y}")
 	return
 
 def check_localisation():
