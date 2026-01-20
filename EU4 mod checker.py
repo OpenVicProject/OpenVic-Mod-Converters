@@ -39,6 +39,7 @@ DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output file
 	"MISSING_PROVINCE_FILE":True, # Some provinces may be placed on a continent or such, but lack a province file, can be ignored as an empty "provinceID.txt" file will simply be generated anyway for the output.
 	"MISSING_PROVINCE_ID":True, # While it is not necessary to use all numbers between 1 and the number of provinces as IDs, maybe you still want to add empty files for such cases, if not you can set it to False.
 	"PROVINCES_WITH_FILES_NOT_USED":True, # Some provinces may have files, but are not actually used on the map, this can be ignored, but maybe is done by mistake.
+	"OCEAN_OR_LAKE_ON_CONTINENT":False, # In EU4 provinces can be on a continent and also be a lake or ocean, if you want a warning about them, set the option to True.
 	"OCEAN_AND_LAKE_CLIMATE":False, # In EU4 oceans and lakes can use climates to let them freeze during winter, but you may want to remove some not not needed ones.
 	"THROUGH_NOT_IN_OCEAN":False, # While not necessary you may want to set the adjacency type sea in map\adjacencies.csv to land, river or lake, if the Through province is not an ocean.
 	"CANAL_NOT_MUTUAL_NEIGHBOUR":False, # It is not necessary for a canal to be next to the From and To province, the Through province can even be the same as From or To, but maybe you want to know about such cases.
@@ -57,7 +58,6 @@ DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output file
 }
 I_READ_THE_INSTRUCTIONS = False # Set this to True after changing all the settings you need to change or want to change and that's it. Now you can run it, if you have a sufficiently new Python version installed. Maybe anything after 3.7 will work, as well as a new enough Pillow version (Python Imaging Library).
 
-# TODO check if ocean/lake files are empty, if bmps have correct indexes.
 # formats a text file when given the path.
 def format_text_in_path(path):
 	with open(path,'r',encoding=ENCODING,errors='replace') as file:
@@ -1028,9 +1028,32 @@ def check_date_entries(text,sorted_list,path):
 	return is_empty
 
 def check_continents():
+	text = format_text_in_path("map\\default.map")
+	ocean = text.split("sea_starts = {",maxsplit=1)[1].split("}",maxsplit=1)[0]
+	ocean = set(map(int,ocean.split())) & PROVINCES_ON_THE_MAP
+	if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and (ocean - PROVINCE_SET):
+		print(f"At least one province is an ocean without a file: {ocean - PROVINCE_SET}")
+	lakes = text.split("lakes = {",maxsplit=1)[1].split("}",maxsplit=1)[0]
+	lakes = set(map(int,lakes.split())) & PROVINCES_ON_THE_MAP
+	water_provinces = ocean | lakes
+	if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and (lakes - PROVINCE_SET):
+		print(f"At least one province is a lake without a file: {lakes - PROVINCE_SET}")
+	if lakes & ocean:
+		print(f"At least one province is an ocean, but also a lake: {lakes & ocean}")
+	if text.count(" max_provinces = ") != 1:
+		print('Either " max_provinces = " does not exist in the map\\default.map file or it appears multiple times.')
+	else:
+		max_provinces = text.split(" max_provinces = ",maxsplit=1)[1].split(" ",maxsplit=1)[0]
+		if not re.fullmatch("[0-9]+",max_provinces):
+			print(f"In map\\default.map max_provinces = {max_provinces} is not an integer value.")
+		elif len(PIXEL_SET) >= int(max_provinces):
+			print(f"The max_provinces value {max_provinces} in the map\\default.map should be at least 1 higher than the number of different colors in the province.bmp {len(PIXEL_SET)}.")
+		elif int(max_provinces) >= 65536:
+			print(f"OpenVic does not yet support more than 65536 provinces and this script will mention a lot of false positives, if there are more unique colors in the province.bmp.")
 	text = format_text_in_path("map\\continent.txt")
 	continent_list = []
 	continent_name_set = set()
+	combined_continent_set = set()
 	while text.__contains__("= {"):
 		[continent_name,text] = text.split("= {",maxsplit=1)
 		[provinces,text] = text.split("}",maxsplit=1)
@@ -1038,36 +1061,21 @@ def check_continents():
 		continent_name = continent_name.strip()
 		if (not provinces) or continent_name == "island_check_provinces":
 			continue
+		if provinces & combined_continent_set:
+			print(f"At least one province is already on a continent, but also on the continent {continent_name}: {provinces & combined_continent_set}")
+		if provinces & (ocean | lakes):
+			if DONT_IGNORE_ISSUE["OCEAN_OR_LAKE_ON_CONTINENT"]:
+				print(f"At least one province is an ocean or lake, but also on the continent {continent_name}: {provinces & (ocean | lakes)}")
+			provinces = provinces - ocean - lakes
+		combined_continent_set |= provinces
 		continent_name_set.add(continent_name)
 		continent_list.append([continent_name,provinces])
 		for entry in provinces:
 			if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in PROVINCE_SET:
 				print(f"No province file with the ID {entry} exists, but the province is on the continent: {continent_name}")
-			for i in range(len(continent_list) - 1):
-				if entry in continent_list[i][1]:
-					print(f"Province {entry} is already on the continent {continent_list[i][0]}, but also on the continent {continent_name}")
-	combined_continent_set = set().union(*(provinces for continent_name, provinces in continent_list))
 	if len(continent_list) > 6:
 		print("OpenVic only supports 6 continents in the UI, so while it will work when there are more, there wont be any functional buttons for them in some windows. Until support for this gets added, you will have to combine continents. Of course you can just generate the output and merge the continents there instead or ignore this problem.")
-	text = format_text_in_path("map\\default.map")
-	ocean = text.split("sea_starts = {",maxsplit=1)[1].split("}",maxsplit=1)[0]
-	ocean = set(map(int,ocean.split())) & PROVINCES_ON_THE_MAP
-	for entry in ocean:
-		if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in PROVINCE_SET:
-			print(f"No province file with the ID {entry} exists, but the province is an ocean province.")
-		if entry in combined_continent_set:
-			print(f"Province {entry} is already on a continent, but also an ocean.")
-	lakes = text.split("lakes = {",maxsplit=1)[1].split("}",maxsplit=1)[0]
-	lakes = set(map(int,lakes.split())) & PROVINCES_ON_THE_MAP
-	water_provinces = ocean.union(lakes)
-	for entry in lakes:
-		if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in PROVINCE_SET:
-			print(f"No province file with the ID {entry} exists, but the province is a lake province.")
-		if entry in combined_continent_set:
-			print(f"Province {entry} is already on a continent, but also a lake.")
-		if entry in ocean:
-			print(f"Province {entry} is already an ocean, but also a lake.")
-	leftover_provinces = (PROVINCE_SET & PROVINCES_ON_THE_MAP) - combined_continent_set - ocean - lakes
+	leftover_provinces =  PROVINCES_ON_THE_MAP - combined_continent_set - ocean - lakes
 	if leftover_provinces:
 		print(f"Some provinces are neither a part of a continent, ocean or lake: {leftover_provinces}")
 	inland_ocean = lakes.copy()
@@ -1093,16 +1101,6 @@ def check_continents():
 	image = Image.open("map\\provinces.bmp")
 	w,h = image.size
 	load_province_bmp = image.load()
-	if text.count(" max_provinces = ") != 1:
-		print('Either " max_provinces = " does not exist in the map\\default.map file or it appears multiple times.')
-	else:
-		max_provinces = text.split(" max_provinces = ",maxsplit=1)[1].split(" ",maxsplit=1)[0]
-		if not re.fullmatch("[0-9]+",max_provinces):
-			print(f"In map\\default.map max_provinces = {max_provinces} is not an integer value.")
-		elif len(PIXEL_SET) >= int(max_provinces):
-			print(f"The max_provinces value {max_provinces} in the map\\default.map should be at least 1 higher than the number of different colors in the province.bmp {len(PIXEL_SET)}.")
-		elif int(max_provinces) >= 65536:
-			print(f"OpenVic does not yet support more than 65536 provinces and this script will mention a lot of false positives, if there are more unique colors in the province.bmp.")
 	tiny_province_color_set = set()
 	for count, color in image.getcolors(65536):
 		if MIN_PROVINCE_SIZE > count:

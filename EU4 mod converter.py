@@ -607,22 +607,22 @@ def get_province_data(text,sorted_list):
 	return dict() # This case should never happen, but just to be sure.
 
 def create_continent_list():
+	text = format_text_in_path("map/default.map")
+	ocean_set = set(text.split("sea_starts = {",maxsplit=1)[1].split("}",maxsplit=1)[0].split()) & PROVINCES_ON_THE_MAP
+	lake_set = set(text.split("lakes = {",maxsplit=1)[1].split("}",maxsplit=1)[0].split()) & PROVINCES_ON_THE_MAP
+	water_province_set = ocean_set.union(lake_set,FORCE_OCEAN_SET)
 	text = format_text_in_path("map/continent.txt")
 	continent_list = []
 	while text.__contains__("= {"):
 		[continent_name,text] = text.split("= {",maxsplit=1)
 		[provinces,text] = text.split("}",maxsplit=1)
-		provinces = set(provinces.split()).difference(FORCE_OCEAN_SET) & PROVINCES_ON_THE_MAP
+		provinces = set(provinces.split()).difference(water_province_set) & PROVINCES_ON_THE_MAP
 		if (not provinces) or continent_name.strip() == "island_check_provinces":
 			continue
 		continent_list.append([continent_name.strip(),provinces])
 	if len(continent_list) > 6:
 		print("OpenVic only supports 6 continents in the UI, so while it will work when there are more, there wont be any functional buttons for them in some windows. Until support for this gets added, you will have to combine continents. Of course you can just generate the output and merge the continents there instead or ignore this problem.")
-	text = format_text_in_path("map/default.map")
-	ocean_set = set(text.split("sea_starts = {",maxsplit=1)[1].split("}",maxsplit=1)[0].split()) & PROVINCES_ON_THE_MAP
 	continent_list.append(["ocean",ocean_set])
-	lake_set = set(text.split("lakes = {",maxsplit=1)[1].split("}",maxsplit=1)[0].split()) & PROVINCES_ON_THE_MAP
-	water_province_set = ocean_set.union(lake_set,FORCE_OCEAN_SET)
 	continent_list.append(["lakes",lake_set.union(FORCE_OCEAN_SET - ocean_set)])
 	return [continent_list,ocean_set,lake_set,water_province_set]
 
