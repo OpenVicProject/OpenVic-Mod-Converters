@@ -40,7 +40,6 @@ DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output file
 	"MISSING_PROVINCE_ID":True, # While it is not necessary to use all numbers between 1 and the number of provinces as IDs, maybe you still want to add empty files for such cases, if not you can set it to False.
 	"PROVINCES_WITH_FILES_NOT_USED":True, # Some provinces may have files, but are not actually used on the map, this can be ignored, but maybe is done by mistake.
 	"OCEAN_OR_LAKE_ON_CONTINENT":False, # In EU4 provinces can be on a continent and also be a lake or ocean, if you want a warning about them, set the option to True.
-	"OCEAN_AND_LAKE_CLIMATE":False, # In EU4 oceans and lakes can use climates to let them freeze during winter, but you may want to remove some not not needed ones.
 	"THROUGH_NOT_IN_OCEAN":False, # While not necessary you may want to set the adjacency type sea in map\adjacencies.csv to land, river or lake, if the Through province is not an ocean.
 	"CANAL_NOT_MUTUAL_NEIGHBOUR":False, # It is not necessary for a canal to be next to the From and To province, the Through province can even be the same as From or To, but maybe you want to know about such cases.
 	"CITY_POSITION_OUTSIDE_BMP":False, # The position of the city could be outside the bmp, though this currently does not matter for conversion to a Victoria 2 mod.
@@ -1212,10 +1211,6 @@ def check_continents():
 		for entry in provinces:
 			if DONT_IGNORE_ISSUE["MISSING_PROVINCE_FILE"] and entry not in PROVINCE_SET:
 				print(f"No province file with the ID {entry} exists, but the province has the climate: {climate_name}")
-			if DONT_IGNORE_ISSUE["OCEAN_AND_LAKE_CLIMATE"] and entry in ocean:
-				print(f"Province {entry} is an ocean, but also has the climate {climate_name}.")
-			if DONT_IGNORE_ISSUE["OCEAN_AND_LAKE_CLIMATE"] and entry in lakes:
-				print(f"Province {entry} is a lake, but also has the climate {climate_name}.")
 		if climate_name == "impassable":
 			impassable = provinces
 	if impassable:
