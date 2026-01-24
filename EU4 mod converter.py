@@ -663,19 +663,24 @@ def create_climate_list():
 	text = format_text_in_path("map/climate.txt")
 	climate_list = []
 	impassable_set = set()
+	impassable_water_set = set()
 	while text.__contains__(" = {"):
 		[climate_name,text] = text.split(" = {",maxsplit=1)
 		[provinces,text] = text.split("}",maxsplit=1)
-		provinces = set(provinces.split()).difference(WATER_PROVINCE_SET) & PROVINCES_ON_THE_MAP
-		if not provinces:
-			continue
 		climate_name = climate_name.rsplit(" ",maxsplit=1)[1]
 		if climate_name == "impassable":
+			provinces = set(provinces.split()) & PROVINCES_ON_THE_MAP
+			impassable_water_set = provinces & WATER_PROVINCE_SET
+			provinces = provinces.difference(WATER_PROVINCE_SET)
 			impassable_set = provinces
+		else:
+			provinces = set(provinces.split()).difference(WATER_PROVINCE_SET) & PROVINCES_ON_THE_MAP
+		if not provinces:
+			continue
 		provinces = {PROVINCE_REORDER[prov] for prov in provinces}
 		provinces = tuple(sorted(provinces, key=int))
 		climate_list.append([climate_name,provinces])
-	return [climate_list,impassable_set]
+	return [climate_list,impassable_set,impassable_water_set]
 
 def create_adjacencies():
 	image = Image.open("map\\provinces.bmp")
@@ -1111,8 +1116,8 @@ if THE_MOD_CHECKER_DID_MENTION_NOTHING:
 	for index in range(len(CONTINENT_LIST)):
 		for province in CONTINENT_LIST[index][1]:
 			PROVINCE_DICTIONARY[province]["continent"] = CONTINENT_LIST[index][0]
-	[CLIMATE_LIST,IMPASSABLE_SET] = create_climate_list()
-	COMBINED_IMPASSABLE_SET = IMPASSABLE_SET.union(LAKE_SET,FORCE_OCEAN_SET)
+	[CLIMATE_LIST,IMPASSABLE_SET,IMPASSABLE_WATER_SET] = create_climate_list()
+	COMBINED_IMPASSABLE_SET = IMPASSABLE_SET.union(LAKE_SET,FORCE_OCEAN_SET,IMPASSABLE_WATER_SET)
 	ADJACENCY_LIST = create_adjacencies()
 	PORT_POSITIONS = create_positions_list()
 	#V2_river_bmp = create_river_bmp()
