@@ -1017,7 +1017,7 @@ def check_date_entries(text,sorted_list,path):
 						print(f"{tag} core is not present for {date}, but removed in {path}")
 				if tag in added_cores:
 					print(f"{tag} is added and removed for {date} in {path}")
-				if tag in removed_cores and (tag not in removed_cores):
+				if tag in removed_cores:
 					if DONT_IGNORE_ISSUE["DUPLICATE_REMOVAL_CORE"]:
 						print(f"{tag} core was already removed for {date}, but removed again in {path}")
 				else:
@@ -1224,7 +1224,7 @@ def check_continents():
 			print(f"The following provinces are continental and don't use terrain_override: {leftover_provinces}")
 	if impassable - EMPTY_PROVINCE_FILES_SET:
 		print(f"The following impassable provinces do not have empty province files: {impassable - EMPTY_PROVINCE_FILES_SET}")
-	return [continent_name_set,combined_continent_set,ocean,lakes,impassable,water_provinces,adjacency_dictionary]
+	return [continent_name_set,combined_continent_set,ocean,lakes,impassable,water_provinces,province_colors_are_in_definition_csv,adjacency_dictionary]
 
 def check_adjacencies():
 	csv_adjacency_dictionary = defaultdict(set)
@@ -1523,7 +1523,7 @@ def check_positions():
 	image_load = image.load()
 	if [p for p,v in positions_dictionary.items() if v == None ]:
 		print(f"The provinces {[p for p,v in positions_dictionary.items() if v == None ]} do not have at least one rounded position within the province itself.")
-	if STRAY_PIXEL_AMOUNT > 0 and (STRAY_PIXEL_DISTANCE < w or STRAY_PIXEL_DISTANCE < h):
+	if STRAY_PIXEL_AMOUNT > 0 and (STRAY_PIXEL_DISTANCE < w or STRAY_PIXEL_DISTANCE < h) and PROVINCE_COLORS_ARE_IN_DEFINITION_CSV:
 		for province,position in positions_dictionary.items():
 			if position == None:
 				continue
@@ -1556,6 +1556,8 @@ def check_positions():
 							print(f"The province {RGB_DICTIONARY[image_load_original[x,y]]} might have {counter} possible stray pixel{'s' * (counter != 1)} at {x},{y}, however without a valid position within the province, this may very well be a false positive.")
 						elif dist(positions_dictionary[RGB_DICTIONARY[image_load_original[x,y]]],(x,y)) > STRAY_PIXEL_DISTANCE:
 							print(f"{counter} possible stray pixel{'s' * (counter != 1)} ha{'s' if counter == 1 else 've'} been found at {x},{y}")
+	elif not PROVINCE_COLORS_ARE_IN_DEFINITION_CSV:
+		print("Due to colors in the provinces.bmp that are not in the definition.csv stray pixels are not checked.")
 	return
 
 def check_localisation():
@@ -1586,7 +1588,7 @@ def check_localisation():
 			localisation_dictionary[religion] = 0
 	for government in GOVERNMENT_SET:
 		if government + "_name" in localisation_dictionary:
-			print(f"The government {government + "_name"} is already used for other localisation, maybe a culture, religion or area already has the same name.")
+			print(f"The government {government}_name is already used for other localisation, maybe a culture, religion or area already has the same name.")
 		else:
 			localisation_dictionary[government + "_name"] = 0
 	for continent in CONTINENT_NAME_SET:
@@ -1784,7 +1786,7 @@ def check_gfx():
 	w,h = Image.open(ATLAS_PATH).size
 	if not (ATLAS_SIZE[0] in [2,3,4,5,6,7,8] and ATLAS_SIZE[1] in [2,3,4,5,6,7,8]):
 		print(f"The ATLAS_SIZE {ATLAS_SIZE} you entered is not within the accepted limit.")
-	elif w % ATLAS_SIZE[0] != 0 or h % ATLAS_SIZE[1] != 0 or w % ATLAS_SIZE[0] != h % ATLAS_SIZE[1]:
+	elif w % ATLAS_SIZE[0] != 0 or h % ATLAS_SIZE[1] != 0 or (w // ATLAS_SIZE[0] != h // ATLAS_SIZE[1]):
 		print(f"The size {w},{h} of {ATLAS_PATH} is either not a multiple of the size {ATLAS_SIZE} you entered or the ratio is not equal.")
 	terrain_set = set(PROVINCE_TERRAIN_DICTIONARY.keys())
 	picture_set = set()
@@ -1825,7 +1827,7 @@ else:
 		[PROVINCE_TERRAIN_DICTIONARY, TERRAIN_OVERRIDE_PROVINCES] = check_terrain()
 		if PROVINCE_TERRAIN_DICTIONARY:
 			[PROVINCE_SET,EMPTY_PROVINCE_FILES_SET] = check_province_files()
-			[CONTINENT_NAME_SET,COMBINED_CONTINENT_SET,OCEAN_SET,LAKES_SET,IMPASSABLE_SET,WATER_PROVINCES_SET,ADJACENCY_DICTIONARY] = check_continents()
+			[CONTINENT_NAME_SET,COMBINED_CONTINENT_SET,OCEAN_SET,LAKES_SET,IMPASSABLE_SET,WATER_PROVINCES_SET,PROVINCE_COLORS_ARE_IN_DEFINITION_CSV,ADJACENCY_DICTIONARY] = check_continents()
 			check_adjacencies()
 			AREA_SET = check_area()
 			check_positions()
