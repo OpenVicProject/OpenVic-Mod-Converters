@@ -633,6 +633,7 @@ def create_state_list():
 	counter = 1
 	water_provinces = []
 	text = format_text_in_path("map/area.txt")
+	text = remove_text_between_brackets(text," color = {")
 	text_list = text.split(" = {")
 	area_name = text_list[0].strip()
 	text_list.remove(text_list[0])

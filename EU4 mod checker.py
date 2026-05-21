@@ -55,6 +55,7 @@ DONT_IGNORE_ISSUE = { # Not all issues cause trouble when generating output file
 	"WRONG_PICTURE_SIZE":True, # If you don't want to fix wrong picture sizes you can disable the warning, however depending on how wrong the size is the output could look really bad.
 	"MISSING_FLAGS":False # If you want to know which tags that don't have flags set this to True.
 }
+# If an area is called "color" the area will be ignored, as any " color = { ... }" string in map\area.txt gets removed.
 I_READ_THE_INSTRUCTIONS = False # Set this to True after changing all the settings you need to change or want to change and that's it. Now you can run it, if you have a sufficiently new Python version installed. Maybe anything after 3.7 will work, as well as a new enough Pillow version (Python Imaging Library).
 
 # formats a text file when given the path.
@@ -1283,6 +1284,7 @@ def check_area():
 	combined_area_province_set = set()
 	area_set = set()
 	text = format_text_in_path("map\\area.txt")
+	text = remove_text_between_brackets(text," color = {","map\\area.txt")
 	text_list = text.split(" = {")
 	area_name = text_list[0].strip()
 	text_list.remove(text_list[0])
